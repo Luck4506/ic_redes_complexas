@@ -1,0 +1,36 @@
+===== RESUMO MÉTRICAS ESTRUTURAIS (ETAPA 9) =====
+
+Arquivo de entrada: campinas_drive_adicionado.graphml
+Nós (maior componente): 358
+Arestas (maior componente): 540
+
+---- Estatísticas de grau ----
+Grau mínimo: 1
+Grau máximo: 5
+Grau médio: 3.0168
+Grau mediano: 3.0
+
+---- Métricas globais ----
+Densidade: 0.00845031
+Transitivity (clustering global): 0.06924979
+Clustering médio aproximado (trials=358): 0.06703911
+Assortatividade de grau: 0.16948384
+
+---- Caminhos (aproximado por amostragem) ----
+Amostras para caminhos: 30
+Comprimento médio em hops (aprox): 12.9913
+Comprimento médio em metros (aprox): 1180.92
+Diâmetro aproximado (hops): 32
+
+---- Comunidades / modularidade ----
+Subgrafo comunidades - nós: 93
+Subgrafo comunidades - arestas: 87
+Número de comunidades: 36
+Modularidade (partition do subgrafo): 0.646915
+
+Arquivos gerados:
+- 9_resumo_metricas_estruturais.txt
+- 9_distribuicao_graus.csv
+- 9_distribuicao_graus.png
+- 9_comunidades_resumo.csv
+- 9_comunidades_mapa.html
