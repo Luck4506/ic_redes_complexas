@@ -6,10 +6,14 @@ import statistics
 from collections import Counter
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import networkx as nx
 
 from .io_utils import ensure_city_dirs, load_graphml
+from .metric_graphs import simple_undirected_min_length_graph
 
 
 def structural_metrics(city_id: str, samples_for_paths: int = 30, seed: int = 42) -> dict:
@@ -25,7 +29,10 @@ def structural_metrics(city_id: str, samples_for_paths: int = 30, seed: int = 42
 
     G = load_graphml(clean_path)
 
-    Gu = nx.Graph(G.to_undirected())
+    directed_nodes = G.number_of_nodes()
+    directed_edges = G.number_of_edges()
+
+    Gu = simple_undirected_min_length_graph(G)
 
     if nx.is_connected(Gu):
         Gc = Gu
@@ -58,7 +65,9 @@ def structural_metrics(city_id: str, samples_for_paths: int = 30, seed: int = 42
     sample_nodes = random.sample(list(Gc.nodes()), k=sample_k)
 
     all_distances = []
+    all_weighted_distances = []
     eccentricities = []
+    weighted_eccentricities = []
     for s in sample_nodes:
         dist = nx.single_source_shortest_path_length(Gc, s)
         vals = [d for d in dist.values() if d > 0]
@@ -66,8 +75,16 @@ def structural_metrics(city_id: str, samples_for_paths: int = 30, seed: int = 42
             all_distances.extend(vals)
             eccentricities.append(max(vals))
 
+        weighted_dist = nx.single_source_dijkstra_path_length(Gc, s, weight="length")
+        weighted_vals = [d for d in weighted_dist.values() if d > 0]
+        if weighted_vals:
+            all_weighted_distances.extend(weighted_vals)
+            weighted_eccentricities.append(max(weighted_vals))
+
     avg_shortest_path_len_approx = statistics.mean(all_distances) if all_distances else float("nan")
     diameter_approx = max(eccentricities) if eccentricities else float("nan")
+    avg_shortest_path_len_m_approx = statistics.mean(all_weighted_distances) if all_weighted_distances else float("nan")
+    diameter_m_approx = max(weighted_eccentricities) if weighted_eccentricities else float("nan")
 
     counter = Counter(degree_list)
     sorted_items = sorted(counter.items(), key=lambda x: x[0])
@@ -93,6 +110,9 @@ def structural_metrics(city_id: str, samples_for_paths: int = 30, seed: int = 42
     with open(out_metrics_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["metric", "value"])
+        w.writerow(["directed_nodes_original", directed_nodes])
+        w.writerow(["directed_edges_original", directed_edges])
+        w.writerow(["analysis_graph", "simple_undirected_largest_connected_component"])
         w.writerow(["nodes", n])
         w.writerow(["edges", m])
         w.writerow(["used_largest_connected_component", "yes" if used_cc else "no"])
@@ -106,6 +126,8 @@ def structural_metrics(city_id: str, samples_for_paths: int = 30, seed: int = 42
         w.writerow(["assortativity_degree", assortativity])
         w.writerow(["avg_shortest_path_len_approx_hops", avg_shortest_path_len_approx])
         w.writerow(["diameter_approx_hops", diameter_approx])
+        w.writerow(["avg_shortest_path_len_approx_m", avg_shortest_path_len_m_approx])
+        w.writerow(["diameter_approx_m", diameter_m_approx])
         w.writerow(["samples_for_paths", sample_k])
         w.writerow(["seed", seed])
 
@@ -113,7 +135,9 @@ def structural_metrics(city_id: str, samples_for_paths: int = 30, seed: int = 42
     with open(out_report_txt, "w", encoding="utf-8") as f:
         f.write("=== Métricas Estruturais (E3) — Unweighted/Topologia ===\n\n")
         f.write(f"Entrada: {clean_path}\n")
-        f.write(f"Nós: {n} | Arestas: {m}\n")
+        f.write(f"Grafo original direcionado: nós={directed_nodes} | arestas={directed_edges}\n")
+        f.write(f"Grafo analisado: simples, não-direcionado, maior componente\n")
+        f.write(f"Nós analisados: {n} | Arestas analisadas: {m}\n")
         f.write(f"Usou maior componente conectada? {'SIM' if used_cc else 'NÃO'}\n\n")
         f.write("Grau:\n")
         f.write(f"  min={degree_min}  max={degree_max}  mean={degree_mean:.4f}  median={degree_median}\n\n")
@@ -122,9 +146,11 @@ def structural_metrics(city_id: str, samples_for_paths: int = 30, seed: int = 42
         f.write(f"  transitivity={transitivity:.8f}\n")
         f.write(f"  avg_clustering_approx={avg_clustering_approx:.8f} (trials={trials})\n")
         f.write(f"  assortativity_degree={assortativity:.8f}\n\n")
-        f.write("Caminhos (aprox em hops):\n")
+        f.write("Caminhos (aprox):\n")
         f.write(f"  avg_shortest_path_len_approx={avg_shortest_path_len_approx:.4f}\n")
         f.write(f"  diameter_approx={diameter_approx}\n")
+        f.write(f"  avg_shortest_path_len_approx_m={avg_shortest_path_len_m_approx:.4f}\n")
+        f.write(f"  diameter_approx_m={diameter_m_approx:.4f}\n")
         f.write(f"  samples_for_paths={sample_k}  seed={seed}\n")
 
     return {

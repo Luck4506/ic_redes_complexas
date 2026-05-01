@@ -6,10 +6,14 @@ import random
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import networkx as nx
 
 from .io_utils import ensure_city_dirs, load_graphml
+from .metric_graphs import approximate_global_efficiency, simple_undirected_min_length_graph
 
 
 def _largest_cc_stats(G: nx.Graph) -> Tuple[int, int]:
@@ -23,31 +27,34 @@ def _largest_cc_stats(G: nx.Graph) -> Tuple[int, int]:
     return size_lcc, len(comps)
 
 
-def _approx_efficiency(G: nx.Graph, samples: int = 20, seed: int = 42) -> float:
-    """
-    Eficiência global aproximada:
-      E = média_{i!=j} 1/d(i,j)
-    Aproximamos amostrando alguns nós e rodando BFS (unweighted).
-    """
-    if G.number_of_nodes() < 2:
-        return 0.0
-    rng = random.Random(seed)
-    nodes = list(G.nodes())
-    sample_nodes = nodes if len(nodes) <= samples else rng.sample(nodes, samples)
+def _efficiency_retained(current: float, initial: float) -> float:
+    return current / initial if initial > 0 else 0.0
 
-    total = 0.0
-    count = 0
 
-    for s in sample_nodes:
-        dist = nx.single_source_shortest_path_length(G, s)
-        for t, d in dist.items():
-            if t == s:
-                continue
-            if d > 0:
-                total += 1.0 / float(d)
-                count += 1
+def _static_removal_order(G: nx.Graph, strategy: str, k_edge: int, seed: int, rng: random.Random) -> list[tuple]:
+    edges = list(G.edges())
+    if not edges:
+        return []
+    if strategy == "random":
+        rng.shuffle(edges)
+        print("[E7] Estratégia: random", flush=True)
+        return edges
 
-    return total / count if count else 0.0
+    k = max(1, min(k_edge, G.number_of_nodes()))
+    print(f"[E7] Estratégia: targeted (edge betweenness aprox estático, k={k})", flush=True)
+    eb = nx.edge_betweenness_centrality(G, k=k, normalized=True, seed=seed)
+    return [e for e, _ in sorted(eb.items(), key=lambda x: x[1], reverse=True)]
+
+
+def _remove_adaptive_batch(G: nx.Graph, batch_size: int, k_edge: int, seed: int) -> int:
+    if batch_size <= 0 or G.number_of_edges() == 0:
+        return 0
+
+    k = max(1, min(k_edge, G.number_of_nodes()))
+    eb = nx.edge_betweenness_centrality(G, k=k, normalized=True, seed=seed)
+    selected = [e for e, _ in sorted(eb.items(), key=lambda x: x[1], reverse=True)[:batch_size]]
+    G.remove_edges_from(selected)
+    return len(selected)
 
 
 def testar_resiliencia(
@@ -63,6 +70,7 @@ def testar_resiliencia(
     E7: Remove arestas e mede fragmentação.
     strategy:
       - 'targeted': remove arestas com maior edge-betweenness (aprox)
+      - 'targeted_adaptive': recalcula edge-betweenness a cada ponto da curva
       - 'random'  : remove arestas aleatórias
 
     Saídas:
@@ -77,8 +85,11 @@ def testar_resiliencia(
     print(f"[E7] Carregando grafo: {grafo_path}", flush=True)
     G_dir = load_graphml(grafo_path)
 
-    # Resiliência estrutural -> undirected simples
-    Gu = nx.Graph(G_dir.to_undirected())
+    if not 0 < max_fraction <= 1:
+        raise ValueError("max_fraction deve estar no intervalo (0, 1].")
+
+    # Resiliência estrutural -> undirected simples, preservando menor length
+    Gu = simple_undirected_min_length_graph(G_dir)
     if not nx.is_connected(Gu):
         largest_cc = max(nx.connected_components(Gu), key=len)
         G0 = Gu.subgraph(largest_cc).copy()
@@ -92,20 +103,13 @@ def testar_resiliencia(
     print(f"[E7] Grafo base: nós={n0} arestas={m0} | maior componente? {'SIM' if used_cc else 'NÃO'}", flush=True)
 
     # Define ordem de remoção de arestas
-    edges = list(G0.edges())
-    if strategy == "random":
-        rng.shuffle(edges)
-        removal_order = edges
-        print("[E7] Estratégia: random", flush=True)
-    elif strategy == "targeted":
-        # Edge betweenness é pesado -> usamos aproximação por amostra
-        k = min(k_edge, n0)
-        print(f"[E7] Estratégia: targeted (edge betweenness aprox, k={k})", flush=True)
-        eb = nx.edge_betweenness_centrality(G0, k=k, normalized=True, seed=seed)
-        # Ordena do maior para o menor
-        removal_order = [e for e, _ in sorted(eb.items(), key=lambda x: x[1], reverse=True)]
+    if strategy in {"random", "targeted"}:
+        removal_order = _static_removal_order(G0, strategy, k_edge, seed, rng)
+    elif strategy == "targeted_adaptive":
+        removal_order = []
+        print(f"[E7] Estratégia: targeted_adaptive (recalcula por ponto, k_edge={k_edge})", flush=True)
     else:
-        raise ValueError("strategy deve ser 'random' ou 'targeted'.")
+        raise ValueError("strategy deve ser 'random', 'targeted' ou 'targeted_adaptive'.")
 
     # Pontos na curva
     max_remove = int(max_fraction * m0)
@@ -123,7 +127,8 @@ def testar_resiliencia(
 
     # estado inicial
     size_lcc, num_comp = _largest_cc_stats(G)
-    eff0 = _approx_efficiency(G, samples=efficiency_samples, seed=seed)
+    eff0 = approximate_global_efficiency(G, samples=efficiency_samples, seed=seed)
+    eff_len0 = approximate_global_efficiency(G, samples=efficiency_samples, seed=seed, weight="length")
     registros.append(
         {
             "removed_edges": 0,
@@ -132,19 +137,27 @@ def testar_resiliencia(
             "lcc_fraction": size_lcc / n0 if n0 else 0.0,
             "num_components": num_comp,
             "efficiency_approx": eff0,
+            "efficiency_topological_approx": eff0,
+            "efficiency_topological_retained": 1.0,
+            "efficiency_length_approx": eff_len0,
+            "efficiency_length_retained": 1.0,
         }
     )
 
     # remoções
     for target_removed in removals[1:]:
-        while removed < target_removed and removed < len(removal_order):
-            u, v = removal_order[removed]
-            if G.has_edge(u, v):
-                G.remove_edge(u, v)
-            removed += 1
+        if strategy == "targeted_adaptive":
+            removed += _remove_adaptive_batch(G, target_removed - removed, k_edge, seed)
+        else:
+            while removed < target_removed and removed < len(removal_order):
+                u, v = removal_order[removed]
+                if G.has_edge(u, v):
+                    G.remove_edge(u, v)
+                removed += 1
 
         size_lcc, num_comp = _largest_cc_stats(G)
-        eff = _approx_efficiency(G, samples=efficiency_samples, seed=seed)
+        eff = approximate_global_efficiency(G, samples=efficiency_samples, seed=seed)
+        eff_len = approximate_global_efficiency(G, samples=efficiency_samples, seed=seed, weight="length")
 
         registros.append(
             {
@@ -154,9 +167,17 @@ def testar_resiliencia(
                 "lcc_fraction": size_lcc / n0 if n0 else 0.0,
                 "num_components": num_comp,
                 "efficiency_approx": eff,
+                "efficiency_topological_approx": eff,
+                "efficiency_topological_retained": _efficiency_retained(eff, eff0),
+                "efficiency_length_approx": eff_len,
+                "efficiency_length_retained": _efficiency_retained(eff_len, eff_len0),
             }
         )
-        print(f"[E7] removidas={removed}/{m0} | LCC={size_lcc} ({size_lcc/n0:.3f}) | comps={num_comp} | eff≈{eff:.4f}", flush=True)
+        print(
+            f"[E7] removidas={removed}/{m0} | LCC={size_lcc} ({size_lcc/n0:.3f}) "
+            f"| comps={num_comp} | eff_topo≈{eff:.4f} | eff_len_retida≈{_efficiency_retained(eff_len, eff_len0):.4f}",
+            flush=True,
+        )
 
     # salvar outputs
     pasta_metrics = f"outputs/{city_id}/metrics"
@@ -179,8 +200,6 @@ def testar_resiliencia(
     # Plot (matplotlib)
     xs = [r["removed_fraction"] for r in registros]
     ys = [r["lcc_fraction"] for r in registros]
-    effs = [r["efficiency_approx"] for r in registros]
-
     plt.figure()
     plt.plot(xs, ys, marker="o")
     plt.xlabel("Fração de arestas removidas")
@@ -199,6 +218,16 @@ def testar_resiliencia(
         f.write(f"Steps: {steps}\n")
         f.write(f"k_edge (targeted): {k_edge}\n")
         f.write(f"efficiency_samples: {efficiency_samples}\n\n")
+        f.write("Notas metodológicas:\n")
+        f.write("  - Grafo: simples, não-direcionado, maior componente conectada.\n")
+        f.write("  - Arestas paralelas são colapsadas mantendo o menor length.\n")
+        f.write("  - efficiency_approx é topológica e conta pares desconectados como zero.\n")
+        f.write("  - efficiency_length_approx usa distância em metros; compare principalmente a fração retida.\n")
+        if strategy == "targeted":
+            f.write("  - targeted usa ranking estático de edge betweenness inicial.\n")
+        elif strategy == "targeted_adaptive":
+            f.write("  - targeted_adaptive recalcula edge betweenness a cada ponto da curva.\n")
+        f.write("\n")
         f.write("Último ponto:\n")
         last = registros[-1]
         for k, v in last.items():

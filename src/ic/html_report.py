@@ -1,0 +1,449 @@
+from __future__ import annotations
+
+import csv
+import html
+import json
+from pathlib import Path
+from typing import Any
+
+from .graph_inventory import gerar_planilha_grafo
+
+
+def _read_csv_dicts(path: str) -> list[dict[str, str]]:
+    p = Path(path)
+    if not p.exists():
+        return []
+    with p.open(newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def _read_json(path: str) -> dict[str, Any]:
+    p = Path(path)
+    if not p.exists():
+        return {}
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def _rel(path: str, root: str) -> str:
+    try:
+        return Path(path).relative_to(root).as_posix()
+    except Exception:
+        return path
+
+
+def _e(value: Any) -> str:
+    return html.escape(str(value))
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _format_value(value: Any, unit: str = "", indicator: str = "") -> str:
+    number = _as_float(value)
+    if number is None:
+        return _e(value)
+
+    if unit == "percentual" or indicator.endswith("_pct") or "fraction" in indicator:
+        return f"{number * 100:.2f}%"
+
+    if number.is_integer():
+        return f"{int(number):,}".replace(",", ".")
+
+    if abs(number) >= 1000:
+        return f"{number:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    return f"{number:.4f}".rstrip("0").rstrip(".").replace(".", ",")
+
+
+def _summary_map(rows: list[dict[str, str]]) -> dict[str, dict[str, str]]:
+    return {row.get("indicador", ""): row for row in rows if row.get("indicador")}
+
+
+def _metric(summary: dict[str, dict[str, str]], key: str, fallback: str = "nao encontrado") -> str:
+    row = summary.get(key)
+    if not row:
+        return fallback
+    return _format_value(row.get("valor", ""), row.get("unidade", ""), key)
+
+
+def _card(title: str, value: str, subtitle: str) -> str:
+    return f"""
+      <article class="card">
+        <div class="card-title">{_e(title)}</div>
+        <div class="card-value">{value}</div>
+        <div class="card-subtitle">{_e(subtitle)}</div>
+      </article>
+    """
+
+
+def _table(title: str, rows: list[dict[str, str]], limit: int = 12) -> str:
+    if not rows:
+        return f"""
+        <section class="panel">
+          <h2>{_e(title)}</h2>
+          <p class="empty">Dados nao encontrados.</p>
+        </section>
+        """
+
+    headers = list(rows[0].keys())
+    body = []
+    for row in rows[:limit]:
+        cells = []
+        for header in headers:
+            value = row.get(header, "")
+            if header.endswith("_pct") or header in {"comprimento_pct", "arestas_pct", "nos_pct"}:
+                value = _format_value(value, "percentual", header)
+            elif header in {"comprimento_km", "comprimento_m"}:
+                value = _format_value(value)
+            cells.append(f"<td>{_e(value)}</td>")
+        body.append("<tr>" + "".join(cells) + "</tr>")
+
+    header_html = "".join(f"<th>{_e(h)}</th>" for h in headers)
+    return f"""
+    <section class="panel">
+      <h2>{_e(title)}</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>{header_html}</tr></thead>
+          <tbody>{''.join(body)}</tbody>
+        </table>
+      </div>
+    </section>
+    """
+
+
+def _inventory_rows_by_group(rows: list[dict[str, str]], group: str) -> list[dict[str, str]]:
+    return [row for row in rows if row.get("grupo") == group]
+
+
+def _metric_list(title: str, rows: list[dict[str, str]], limit: int = 20) -> str:
+    if not rows:
+        return ""
+
+    items = []
+    for row in rows[:limit]:
+        indicator = row.get("indicador", "")
+        value = _format_value(row.get("valor", ""), row.get("unidade", ""), indicator)
+        desc = row.get("descricao", "")
+        items.append(
+            f"""
+            <tr>
+              <td><code>{_e(indicator)}</code></td>
+              <td class="numeric">{value}</td>
+              <td>{_e(row.get("unidade", ""))}</td>
+              <td>{_e(desc)}</td>
+            </tr>
+            """
+        )
+
+    return f"""
+    <section class="panel wide">
+      <h2>{_e(title)}</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Indicador</th><th>Valor</th><th>Unidade</th><th>Descricao</th></tr></thead>
+          <tbody>{''.join(items)}</tbody>
+        </table>
+      </div>
+    </section>
+    """
+
+
+def _image_panel(title: str, path: str, outputs_root: str) -> str:
+    if not Path(path).exists():
+        return ""
+    return f"""
+    <section class="panel">
+      <h2>{_e(title)}</h2>
+      <img class="figure" src="{_e(_rel(path, outputs_root))}" alt="{_e(title)}">
+    </section>
+    """
+
+
+def _iframe_panel(title: str, path: str, outputs_root: str) -> str:
+    if not Path(path).exists():
+        return ""
+    return f"""
+    <section class="panel wide">
+      <h2>{_e(title)}</h2>
+      <iframe src="{_e(_rel(path, outputs_root))}" loading="lazy"></iframe>
+    </section>
+    """
+
+
+def gerar_dashboard_html(city_id: str) -> dict:
+    outputs_root = f"outputs/{city_id}"
+    metrics_dir = f"{outputs_root}/metrics"
+    figures_dir = f"{outputs_root}/figures"
+    maps_dir = f"{outputs_root}/maps"
+    dashboard_path = f"{outputs_root}/dashboard_{city_id}.html"
+
+    inventory = gerar_planilha_grafo(city_id)
+    summary_rows = _read_csv_dicts(inventory["summary_csv"])
+    summary = _summary_map(summary_rows)
+
+    meta = _read_json(f"data/metadata/{city_id}_drive_raw.json")
+    highway_rows = _read_csv_dicts(f"{metrics_dir}/graph_inventory_highway.csv")
+    surface_rows = _read_csv_dicts(f"{metrics_dir}/graph_inventory_surface.csv")
+    maxspeed_rows = _read_csv_dicts(f"{metrics_dir}/graph_inventory_maxspeed.csv")
+    lanes_rows = _read_csv_dicts(f"{metrics_dir}/graph_inventory_lanes.csv")
+    degree_rows = _read_csv_dicts(f"{metrics_dir}/graph_inventory_degree.csv")
+    communities_rows = _read_csv_dicts(f"{metrics_dir}/community_summary.csv")
+    top_nodes_rows = _read_csv_dicts(f"{metrics_dir}/top_nodes.csv")
+    top_edges_rows = _read_csv_dicts(f"{metrics_dir}/top_edges.csv")
+    res_target_rows = _read_csv_dicts(f"{metrics_dir}/resilience_curve_targeted.csv")
+    res_target_adaptive_rows = _read_csv_dicts(f"{metrics_dir}/resilience_curve_targeted_adaptive.csv")
+    res_random_rows = _read_csv_dicts(f"{metrics_dir}/resilience_curve_random.csv")
+    comm_res_summary_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_summary.csv")
+    comm_res_top_edges_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_top_edges.csv")
+    comm_res_target_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_targeted.csv")
+    comm_res_target_adaptive_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_targeted_adaptive.csv")
+    comm_res_random_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_random.csv")
+
+    cards = [
+        _card("Nos", _metric(summary, "nodes"), "Intersecoes/pontos do grafo"),
+        _card("Arestas", _metric(summary, "edges"), "Segmentos direcionados"),
+        _card("Extensao", f"{_metric(summary, 'total_length_km')} km", "Soma dos comprimentos"),
+        _card("Vias nomeadas", _metric(summary, "named_streets_unique"), "Nomes distintos no OSM"),
+        _card("Asfaltado informado", _metric(summary, "paved_edges_pct"), "Dado observado no OSM"),
+        _card("Asfaltado estimado", _metric(summary, "estimated_paved_edges_pct"), "Estimativa, nao dado observado"),
+        _card("Surface conhecido", _metric(summary, "surface_known_edges_pct"), "Cobertura do atributo surface"),
+        _card("Terra informada", _metric(summary, "unpaved_edges_pct"), "Dado observado no OSM"),
+        _card("Grau medio", _metric(summary, "degree_mean"), "Maior componente"),
+        _card("Transitividade", _metric(summary, "transitivity"), "Fechamento de triangulos"),
+    ]
+
+    if meta:
+        meta_block = f"""
+        <section class="panel wide">
+          <h2>Configuracao do Download</h2>
+          <div class="meta-grid">
+            <div><strong>Dataset</strong><span>{_e(city_id)}</span></div>
+            <div><strong>Cidade base</strong><span>{_e(meta.get('city_id', city_id))}</span></div>
+            <div><strong>Data historica</strong><span>{_e(meta.get('historical_date', 'OSM atual'))}</span></div>
+            <div><strong>Tipo de rede</strong><span>{_e(meta.get('network_type', ''))}</span></div>
+            <div><strong>Nos raw</strong><span>{_e(meta.get('nodes', ''))}</span></div>
+            <div><strong>Arestas raw</strong><span>{_e(meta.get('edges', ''))}</span></div>
+          </div>
+        </section>
+        """
+    else:
+        meta_block = """
+        <section class="panel wide">
+          <h2>Configuracao do Download</h2>
+          <p class="empty">Metadados do download nao encontrados.</p>
+        </section>
+        """
+
+    sections = [
+        meta_block,
+        _metric_list("Resumo Consolidado", summary_rows, limit=80),
+        _table("Superficie da Rede", surface_rows),
+        _table("Tipos de Via", highway_rows),
+        _table("Velocidades Maximas", maxspeed_rows),
+        _table("Faixas", lanes_rows),
+        _table("Distribuicao de Grau", degree_rows),
+        _table("Comunidades", communities_rows),
+        _table("Top Nos Criticos", top_nodes_rows),
+        _table("Top Arestas Criticas", top_edges_rows),
+        _table("Resiliencia - Remocao Dirigida", res_target_rows),
+        _table("Resiliencia - Remocao Dirigida Adaptativa", res_target_adaptive_rows),
+        _table("Resiliencia - Remocao Aleatoria", res_random_rows),
+        _table("Resiliencia por Comunidades - Resumo", comm_res_summary_rows),
+        _table("Resiliencia por Comunidades - Conexoes Criticas", comm_res_top_edges_rows),
+        _table("Resiliencia por Comunidades - Dirigida", comm_res_target_rows),
+        _table("Resiliencia por Comunidades - Dirigida Adaptativa", comm_res_target_adaptive_rows),
+        _table("Resiliencia por Comunidades - Aleatoria", comm_res_random_rows),
+        _image_panel("Distribuicao de Graus", f"{figures_dir}/degree_distribution_loglog.png", outputs_root),
+        _image_panel("Resiliencia - Dirigida", f"{figures_dir}/resilience_curve_targeted.png", outputs_root),
+        _image_panel("Resiliencia - Dirigida Adaptativa", f"{figures_dir}/resilience_curve_targeted_adaptive.png", outputs_root),
+        _image_panel("Resiliencia - Aleatoria", f"{figures_dir}/resilience_curve_random.png", outputs_root),
+        _image_panel("Resiliencia por Comunidades - Dirigida", f"{figures_dir}/community_resilience_curve_targeted.png", outputs_root),
+        _image_panel("Resiliencia por Comunidades - Dirigida Adaptativa", f"{figures_dir}/community_resilience_curve_targeted_adaptive.png", outputs_root),
+        _image_panel("Resiliencia por Comunidades - Aleatoria", f"{figures_dir}/community_resilience_curve_random.png", outputs_root),
+        _image_panel("Grafo - Ruas", f"{figures_dir}/grafo_{city_id}_clean_ruas.png", outputs_root),
+        _image_panel("Grafo - Ruas e Nos", f"{figures_dir}/grafo_{city_id}_clean_ruas_nos.png", outputs_root),
+        _image_panel("Grafo - Comunidades", f"{figures_dir}/grafo_{city_id}_clean_comunidades.png", outputs_root),
+        _iframe_panel("Mapa de Rota", f"{maps_dir}/rota_distancia.html", outputs_root),
+        _iframe_panel("Mapa de Pontos Criticos", f"{maps_dir}/pontos_criticos.html", outputs_root),
+        _iframe_panel("Mapa de Comunidades", f"{maps_dir}/comunidades.html", outputs_root),
+    ]
+
+    css = """
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #1f2933;
+      --muted: #687385;
+      --line: #d9dee7;
+      --accent: #1769aa;
+      --accent-soft: #e8f2fb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+    header {
+      padding: 32px 40px 20px;
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+    }
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 32px;
+      letter-spacing: 0;
+    }
+    header p { margin: 0; color: var(--muted); }
+    main {
+      padding: 24px 40px 48px;
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 18px;
+    }
+    .cards {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+    }
+    .card, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 1px 2px rgba(20, 30, 45, 0.04);
+    }
+    .card { padding: 16px; min-height: 118px; }
+    .card-title {
+      color: var(--muted);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .card-value {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 8px 0 6px;
+    }
+    .card-subtitle { color: var(--muted); font-size: 13px; }
+    .panel {
+      grid-column: span 6;
+      padding: 18px;
+      min-width: 0;
+    }
+    .panel.wide { grid-column: 1 / -1; }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+    .table-wrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      background: #fff;
+    }
+    th, td {
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+    th {
+      background: var(--accent-soft);
+      color: #123a5b;
+      font-weight: 650;
+    }
+    td.numeric { font-variant-numeric: tabular-nums; }
+    code {
+      background: #eef1f5;
+      padding: 2px 5px;
+      border-radius: 4px;
+    }
+    .figure {
+      display: block;
+      width: 100%;
+      max-height: 620px;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+    iframe {
+      width: 100%;
+      height: 520px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+    }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+    }
+    .meta-grid div {
+      background: #f9fafb;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    .meta-grid strong {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      margin-bottom: 4px;
+    }
+    .empty { color: var(--muted); }
+    @media (max-width: 900px) {
+      header, main { padding-left: 18px; padding-right: 18px; }
+      .panel { grid-column: 1 / -1; }
+      header h1 { font-size: 26px; }
+    }
+    """
+
+    html_doc = f"""<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard do Grafo - {_e(city_id)}</title>
+  <style>{css}</style>
+</head>
+<body>
+  <header>
+    <h1>Dashboard do Grafo - {_e(city_id)}</h1>
+    <p>Relatorio visual gerado a partir dos arquivos de metricas, inventario, mapas e figuras da pipeline.</p>
+  </header>
+  <main>
+    <section class="cards">{''.join(cards)}</section>
+    {''.join(sections)}
+  </main>
+</body>
+</html>
+"""
+
+    Path(outputs_root).mkdir(parents=True, exist_ok=True)
+    Path(dashboard_path).write_text(html_doc, encoding="utf-8")
+
+    return {
+        "dashboard_html": dashboard_path,
+        "inventory_summary_csv": inventory["summary_csv"],
+    }

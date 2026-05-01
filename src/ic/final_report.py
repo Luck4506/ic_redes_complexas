@@ -138,9 +138,18 @@ def gerar_relatorio_final(city_id: str) -> dict:
 
     # --- E7 ---
     res_target_csv = f"{metrics_dir}/resilience_curve_targeted.csv"
+    res_target_adaptive_csv = f"{metrics_dir}/resilience_curve_targeted_adaptive.csv"
     res_rand_csv = f"{metrics_dir}/resilience_curve_random.csv"
+    comm_res_target_csv = f"{metrics_dir}/community_resilience_curve_targeted.csv"
+    comm_res_target_adaptive_csv = f"{metrics_dir}/community_resilience_curve_targeted_adaptive.csv"
+    comm_res_rand_csv = f"{metrics_dir}/community_resilience_curve_random.csv"
+    comm_res_top_edges_csv = f"{metrics_dir}/community_resilience_top_edges.csv"
     res_target_plot = f"{figs_dir}/resilience_curve_targeted.png"
+    res_target_adaptive_plot = f"{figs_dir}/resilience_curve_targeted_adaptive.png"
     res_rand_plot = f"{figs_dir}/resilience_curve_random.png"
+    comm_res_target_plot = f"{figs_dir}/community_resilience_curve_targeted.png"
+    comm_res_target_adaptive_plot = f"{figs_dir}/community_resilience_curve_targeted_adaptive.png"
+    comm_res_rand_plot = f"{figs_dir}/community_resilience_curve_random.png"
 
     # --- E3 figura ---
     degree_plot = f"{figs_dir}/degree_distribution_loglog.png"
@@ -154,6 +163,8 @@ def gerar_relatorio_final(city_id: str) -> dict:
     if structural:
         structural_block = "\n".join(
             [
+                f"- **Grafo original direcionado:** {structural.get('directed_nodes_original', '—')} nós / {structural.get('directed_edges_original', '—')} arestas",
+                f"- **Grafo analisado:** {structural.get('analysis_graph', '—')}",
                 f"- **Nós (n):** {structural.get('nodes', '—')}",
                 f"- **Arestas (m):** {structural.get('edges', '—')}",
                 f"- **Grau médio:** {structural.get('degree_mean', '—')}",
@@ -162,6 +173,8 @@ def gerar_relatorio_final(city_id: str) -> dict:
                 f"- **Assortatividade (grau):** {structural.get('assortativity_degree', '—')}",
                 f"- **Caminho médio (aprox, hops):** {structural.get('avg_shortest_path_len_approx_hops', '—')}",
                 f"- **Diâmetro (aprox, hops):** {structural.get('diameter_approx_hops', '—')}",
+                f"- **Caminho médio (aprox, metros):** {structural.get('avg_shortest_path_len_approx_m', '—')}",
+                f"- **Diâmetro (aprox, metros):** {structural.get('diameter_approx_m', '—')}",
             ]
         )
     else:
@@ -210,7 +223,11 @@ def gerar_relatorio_final(city_id: str) -> dict:
 
     # Resiliência: último ponto
     last_target = _last_row(res_target_csv)
+    last_target_adaptive = _last_row(res_target_adaptive_csv)
     last_random = _last_row(res_rand_csv)
+    last_comm_target = _last_row(comm_res_target_csv)
+    last_comm_target_adaptive = _last_row(comm_res_target_adaptive_csv)
+    last_comm_random = _last_row(comm_res_rand_csv)
 
     res_block: List[str] = []
     if last_target:
@@ -220,12 +237,32 @@ def gerar_relatorio_final(city_id: str) -> dict:
             f"fração de arestas removidas={last_target.get('removed_fraction')} | "
             f"fração da maior componente (LCC)={last_target.get('lcc_fraction')} | "
             f"nº de componentes={last_target.get('num_components')} | "
-            f"eficiência (aprox)={last_target.get('efficiency_approx')}"
+            f"eficiência topológica (aprox)={last_target.get('efficiency_topological_approx', last_target.get('efficiency_approx'))} | "
+            f"eficiência topológica retida={last_target.get('efficiency_topological_retained', '—')} | "
+            f"eficiência por distância retida={last_target.get('efficiency_length_retained', '—')}"
         )
         if Path(res_target_plot).exists():
             res_block.append(f"- Figura: `{_rel_to_outputs(res_target_plot, outputs_root)}`")
     else:
         res_block.append("### Direcionada\n_(não encontrado — execute `ic resilience --strategy targeted`)_")
+
+    res_block.append("")
+
+    if last_target_adaptive:
+        res_block.append("### Direcionada adaptativa\n")
+        res_block.append(
+            "- Último ponto: "
+            f"fração de arestas removidas={last_target_adaptive.get('removed_fraction')} | "
+            f"fração da maior componente (LCC)={last_target_adaptive.get('lcc_fraction')} | "
+            f"nº de componentes={last_target_adaptive.get('num_components')} | "
+            f"eficiência topológica (aprox)={last_target_adaptive.get('efficiency_topological_approx', last_target_adaptive.get('efficiency_approx'))} | "
+            f"eficiência topológica retida={last_target_adaptive.get('efficiency_topological_retained', '—')} | "
+            f"eficiência por distância retida={last_target_adaptive.get('efficiency_length_retained', '—')}"
+        )
+        if Path(res_target_adaptive_plot).exists():
+            res_block.append(f"- Figura: `{_rel_to_outputs(res_target_adaptive_plot, outputs_root)}`")
+    else:
+        res_block.append("### Direcionada adaptativa\n_(não encontrado — execute `ic resilience --strategy targeted_adaptive`)_")
 
     res_block.append("")
 
@@ -236,7 +273,9 @@ def gerar_relatorio_final(city_id: str) -> dict:
             f"fração de arestas removidas={last_random.get('removed_fraction')} | "
             f"fração da maior componente (LCC)={last_random.get('lcc_fraction')} | "
             f"nº de componentes={last_random.get('num_components')} | "
-            f"eficiência (aprox)={last_random.get('efficiency_approx')}"
+            f"eficiência topológica (aprox)={last_random.get('efficiency_topological_approx', last_random.get('efficiency_approx'))} | "
+            f"eficiência topológica retida={last_random.get('efficiency_topological_retained', '—')} | "
+            f"eficiência por distância retida={last_random.get('efficiency_length_retained', '—')}"
         )
         if Path(res_rand_plot).exists():
             res_block.append(f"- Figura: `{_rel_to_outputs(res_rand_plot, outputs_root)}`")
@@ -244,6 +283,47 @@ def gerar_relatorio_final(city_id: str) -> dict:
         res_block.append("### Aleatória\n_(não encontrado — execute `ic resilience --strategy random`)_")
 
     res_block_md = "\n".join(res_block)
+
+    comm_res_block: List[str] = []
+    for label, last_row, plot_path, command in [
+        ("Direcionada", last_comm_target, comm_res_target_plot, "targeted"),
+        ("Direcionada adaptativa", last_comm_target_adaptive, comm_res_target_adaptive_plot, "targeted_adaptive"),
+        ("Aleatória", last_comm_random, comm_res_rand_plot, "random"),
+    ]:
+        if last_row:
+            comm_res_block.append(f"### {label}\n")
+            comm_res_block.append(
+                "- Último ponto: "
+                f"fração de conexões removidas={last_row.get('removed_fraction')} | "
+                f"LCC comunidades={last_row.get('lcc_communities_fraction')} | "
+                f"LCC ponderada por nós={last_row.get('lcc_nodes_fraction')} | "
+                f"nº de componentes={last_row.get('num_components')} | "
+                f"eficiência topológica retida={last_row.get('efficiency_topological_retained', '—')} | "
+                f"eficiência por distância retida={last_row.get('efficiency_length_retained', '—')}"
+            )
+            if Path(plot_path).exists():
+                comm_res_block.append(f"- Figura: `{_rel_to_outputs(plot_path, outputs_root)}`")
+        else:
+            comm_res_block.append(f"### {label}\n_(não encontrado — execute `ic community-resilience --strategy {command}`)_")
+        comm_res_block.append("")
+
+    comm_res_edges_rows = _read_csv_rows(comm_res_top_edges_csv, limit=10)
+    comm_res_edges_rows = _rename_header(
+        comm_res_edges_rows,
+        {
+            "source_community": "comunidade origem",
+            "target_community": "comunidade destino",
+            "source_size": "tamanho origem",
+            "target_size": "tamanho destino",
+            "edge_count": "conexões viárias",
+            "total_length_m": "comprimento total (m)",
+            "min_length_m": "menor ligação (m)",
+            "edge_betweenness": "edge betweenness",
+        },
+    )
+    comm_res_block.append("### Conexões entre comunidades mais críticas\n")
+    comm_res_block.append(_fmt_md_table(comm_res_edges_rows))
+    comm_res_block_md = "\n".join(comm_res_block)
 
     # Links/artefatos (sempre relativos ao outputs/<city>)
     links: List[str] = []
@@ -253,6 +333,10 @@ def gerar_relatorio_final(city_id: str) -> dict:
         links.append(f"- Mapa de pontos críticos: `{_rel_to_outputs(crit_map, outputs_root)}`")
     if Path(comm_map).exists():
         links.append(f"- Mapa de comunidades: `{_rel_to_outputs(comm_map, outputs_root)}`")
+    if Path(res_target_adaptive_plot).exists():
+        links.append(f"- Resiliência adaptativa: `{_rel_to_outputs(res_target_adaptive_plot, outputs_root)}`")
+    if Path(comm_res_target_plot).exists():
+        links.append(f"- Resiliência por comunidades: `{_rel_to_outputs(comm_res_target_plot, outputs_root)}`")
     if Path(route_map).exists():
         links.append(f"- Mapa de rota (E4): `{_rel_to_outputs(route_map, outputs_root)}`")
     links.append(f"- Lista de arquivos gerados (manifest): `{_rel_to_outputs(manifest_txt, outputs_root)}`")
@@ -311,7 +395,10 @@ def gerar_relatorio_final(city_id: str) -> dict:
     md.append("\n## 6. Resiliência (E7)\n")
     md.append(res_block_md)
 
-    md.append("\n## 7. Artefatos gerados\n")
+    md.append("\n## 7. Resiliência por comunidades (E7C)\n")
+    md.append(comm_res_block_md)
+
+    md.append("\n## 8. Artefatos gerados\n")
     md.append(links_md)
 
     Path(report_md).write_text("\n".join(md) + "\n", encoding="utf-8")

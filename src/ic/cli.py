@@ -8,11 +8,15 @@ from .preprocess import preprocess_city
 from .metrics_structural import structural_metrics
 from .communities import detectar_comunidades
 from .resilience import testar_resiliencia
+from .community_resilience import testar_resiliencia_comunidades
 from .final_report import gerar_relatorio_final
 from .plot_graph import plotar_grafos_png
 from .paths_accessibility import gerar_rota_distancia, Coordenada
 from .centrality import calcular_centralidades
 from .kepler_export import exportar_para_kepler
+from .graph_inventory import gerar_planilha_grafo
+from .html_report import gerar_dashboard_html
+from .compare_report import gerar_comparacao_html
 
 
 def _add_year_argument(parser: argparse.ArgumentParser) -> None:
@@ -80,12 +84,22 @@ def main() -> None:
     p_res = sub.add_parser("resilience", help="E7: teste de resiliência removendo arestas.")
     p_res.add_argument("--city", required=True)
     _add_year_argument(p_res)
-    p_res.add_argument("--strategy", choices=["random", "targeted"], default="targeted")
+    p_res.add_argument("--strategy", choices=["random", "targeted", "targeted_adaptive"], default="targeted")
     p_res.add_argument("--max-fraction", type=float, default=0.15)
     p_res.add_argument("--steps", type=int, default=15)
     p_res.add_argument("--k-edge", type=int, default=80)
     p_res.add_argument("--eff-samples", type=int, default=20)
     p_res.add_argument("--seed", type=int, default=42)
+
+    # --- Teste de resiliência no grafo agregado de comunidades ---
+    p_res_comm = sub.add_parser("community-resilience", help="E7C: resiliência entre comunidades detectadas.")
+    p_res_comm.add_argument("--city", required=True)
+    _add_year_argument(p_res_comm)
+    p_res_comm.add_argument("--strategy", choices=["random", "targeted", "targeted_adaptive"], default="targeted")
+    p_res_comm.add_argument("--max-fraction", type=float, default=0.30)
+    p_res_comm.add_argument("--steps", type=int, default=15)
+    p_res_comm.add_argument("--min-size", type=int, default=30)
+    p_res_comm.add_argument("--seed", type=int, default=42)
 
     #--- Relatório final ---   
     p_rep = sub.add_parser("report", help="E8: gerar relatório consolidado (Markdown) + manifest.")
@@ -103,6 +117,21 @@ def main() -> None:
     p_kepler.add_argument("--city", required=True)
     _add_year_argument(p_kepler)
     p_kepler.add_argument("--which", choices=["raw", "clean"], default="clean")
+
+    # --- Planilha de inventário do grafo ---
+    p_inventory = sub.add_parser("inventory", help="Gera planilhas CSV explicativas com atributos e métricas do grafo.")
+    p_inventory.add_argument("--city", required=True)
+    _add_year_argument(p_inventory)
+
+    # --- Dashboard HTML ---
+    p_dashboard = sub.add_parser("dashboard", help="Gera um HTML visual com as métricas e artefatos da pipeline.")
+    p_dashboard.add_argument("--city", required=True)
+    _add_year_argument(p_dashboard)
+
+    # --- Comparação de datasets ---
+    p_compare = sub.add_parser("compare", help="Gera um HTML comparativo entre dois ou mais datasets já processados.")
+    p_compare.add_argument("datasets", nargs="+", help="Ex.: campinas_2021 campinas_2024 sorocaba")
+    p_compare.add_argument("--output", help="Caminho opcional do HTML de saída.")
 
     args = parser.parse_args()
 
@@ -203,6 +232,23 @@ def main() -> None:
         print("Figura:", res["curve_plot"])
         print("Relatório:", res["report_txt"])
         return
+
+    if args.cmd == "community-resilience":
+        res = testar_resiliencia_comunidades(
+            city_id=_dataset_city(args),
+            strategy=args.strategy,
+            max_fraction=args.max_fraction,
+            steps=args.steps,
+            min_size=args.min_size,
+            seed=args.seed,
+        )
+        print("\n[E7C] Resiliência por comunidades concluída ✅")
+        print("Curva CSV:", res["curve_csv"])
+        print("Resumo comunidades:", res["summary_csv"])
+        print("Top conexões:", res["top_edges_csv"])
+        print("Figura:", res["curve_plot"])
+        print("Relatório:", res["report_txt"])
+        return
     
     if args.cmd == "report":
         res = gerar_relatorio_final(_dataset_city(args))
@@ -231,6 +277,33 @@ def main() -> None:
         print("Nós->Comunidades (E6):", res["nodes_communities_csv"] or "(não encontrado)")
         print("Resumo comunidades (E6):", res["community_summary_csv"] or "(não encontrado)")
         print("Rota (E4):", res["route_geojson"] or "(não encontrada)")
+        return
+
+    if args.cmd == "inventory":
+        res = gerar_planilha_grafo(_dataset_city(args))
+        print("\n[Inventário] Planilhas geradas ✅")
+        print("Resumo:", res["summary_csv"])
+        print("Tipos de via:", res["highway_csv"])
+        print("Superfície:", res["surface_csv"])
+        print("Velocidade:", res["maxspeed_csv"])
+        print("Faixas:", res["lanes_csv"])
+        print("Mão única:", res["oneway_csv"])
+        print("Distribuição de grau:", res["degree_csv"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "dashboard":
+        res = gerar_dashboard_html(_dataset_city(args))
+        print("\n[Dashboard] HTML gerado ✅")
+        print("HTML:", res["dashboard_html"])
+        print("Inventário usado:", res["inventory_summary_csv"])
+        return
+
+    if args.cmd == "compare":
+        res = gerar_comparacao_html(args.datasets, output_path=args.output)
+        print("\n[Compare] HTML comparativo gerado ✅")
+        print("Datasets:", ", ".join(res["datasets"]))
+        print("HTML:", res["compare_html"])
         return
 
 if __name__ == "__main__":

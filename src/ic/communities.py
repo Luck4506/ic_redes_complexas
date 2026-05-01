@@ -10,6 +10,7 @@ import folium
 import networkx as nx
 
 from .io_utils import ensure_city_dirs, load_graphml
+from .metric_graphs import simple_undirected_min_length_graph
 
 
 def _paleta_cores() -> List[str]:
@@ -49,7 +50,7 @@ def detectar_comunidades(
     G_dir = load_graphml(grafo_path)
 
     # Trabalhar com estrutura (unweighted) -> undirected
-    Gu = nx.Graph(G_dir.to_undirected())
+    Gu = simple_undirected_min_length_graph(G_dir)
 
     # Maior componente conexa (evita comunidades “falsas” por desconexão)
     if nx.is_connected(Gu):

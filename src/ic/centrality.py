@@ -7,6 +7,7 @@ import folium
 import networkx as nx
 
 from .io_utils import ensure_city_dirs, load_graphml
+from .metric_graphs import simple_undirected_min_length_graph
 
 
 def calcular_centralidades(
@@ -24,7 +25,7 @@ def calcular_centralidades(
     G_dir = load_graphml(grafo_path)
 
     print("[E5] Convertendo para undirected + maior componente...", flush=True)
-    Gu = nx.Graph(G_dir.to_undirected())
+    Gu = simple_undirected_min_length_graph(G_dir)
 
     if nx.is_connected(Gu):
         G = Gu

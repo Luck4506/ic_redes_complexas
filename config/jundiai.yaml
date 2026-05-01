@@ -1,0 +1,14 @@
+city_id: jundiai
+network_type: drive
+simplify: true
+
+clip_mode: bbox
+bbox:
+  north: -23.05
+  south: -23.32
+  east:  -46.75
+  west:  -47.05
+
+overpass:
+  use_cache: true
+  cache_folder: data/cache
