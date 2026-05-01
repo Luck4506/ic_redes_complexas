@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ic-redes-complexas"
+version = "0.1.0"
+description = "IC - Redes Complexas na Rede Viária"
+requires-python = ">=3.10"
+dependencies = [
+  "osmnx>=2.0.0",
+  "networkx>=3.0",
+  "folium>=0.15",
+  "pandas>=2.0",
+  "numpy>=1.24",
+  "matplotlib>=3.7",
+  "pyyaml>=6.0",
+]
+
+[project.scripts]
+ic = "ic.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

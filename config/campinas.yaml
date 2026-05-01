@@ -1,0 +1,14 @@
+city_id: campinas
+network_type: drive
+simplify: true
+
+clip_mode: bbox
+bbox:
+  north: -22.70
+  south: -23.05
+  east:  -46.85
+  west:  -47.25
+
+overpass:
+  use_cache: true
+  cache_folder: data/cache

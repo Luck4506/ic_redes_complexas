@@ -1,0 +1,14 @@
+city_id: sorocaba
+network_type: drive
+simplify: true
+
+clip_mode: bbox
+bbox:
+  north: -23.43
+  south: -23.58
+  east:  -47.33
+  west:  -47.56
+
+overpass:
+  use_cache: true
+  cache_folder: data/cache

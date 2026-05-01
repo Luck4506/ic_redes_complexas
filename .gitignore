@@ -1,0 +1,48 @@
+# Sistema operacional
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Ambientes virtuais e variaveis locais
+.venv/
+venv/
+.env
+.env.*
+
+# Artefatos gerados no projeto
+data/
+cache/
+outputs/
+rotas_multimodais/cache/
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Dados e outputs pesados
+data/graphs/*.graphml
+data/cache/
+outputs/
+
+# Logs
+*.log

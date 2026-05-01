@@ -1,0 +1,14 @@
+city_id: valinhos
+network_type: drive
+simplify: true
+
+clip_mode: bbox
+bbox:
+  north: -22.89
+  south: -23.08
+  east:  -46.93
+  west:  -47.10
+
+overpass:
+  use_cache: true
+  cache_folder: data/cache

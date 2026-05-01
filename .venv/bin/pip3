@@ -1,4 +1,4 @@
-#!/Users/lucasgoncalves/Library/CloudStorage/OneDrive-SociedadeCampineiradeEducaçãoeInstrução/Projeto/.venv/bin/python3.12
+#!/Users/lucasgoncalves/Documentos/Lucas/Desenvolvimento/ic_redes_complexas/.venv/bin/python
 # -*- coding: utf-8 -*-
 import re
 import sys
