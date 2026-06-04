@@ -26,5 +26,9 @@ ic community-resilience --city [nome_cidade] --year [ano] --strategy targeted --
 ic community-resilience --city [nome_cidade] --strategy targeted_adaptive --max-fraction 0.30 --steps 15 --min-size 30 --seed 42
 ic community-resilience --city [nome_cidade] --year [ano] --strategy targeted_adaptive --max-fraction 0.30 --steps 15 --min-size 30 --seed 42
 ic community-resilience --city [nome_cidade] --strategy random --max-fraction 0.30 --steps 15 --min-size 30 --seed 42
+ic intra-community-resilience --city [nome_cidade] --strategy targeted --max-fraction 0.15 --steps 10 --min-size 2 --k-edge 40 --eff-samples 20 --seed 42
+ic intra-community-resilience --city [nome_cidade] --year [ano] --strategy targeted --max-fraction 0.15 --steps 10 --min-size 2 --k-edge 40 --eff-samples 20 --seed 42
+ic intra-community-resilience --city [nome_cidade] --strategy targeted_adaptive --max-fraction 0.15 --steps 10 --min-size 2 --k-edge 40 --eff-samples 20 --seed 42
+ic intra-community-resilience --city [nome_cidade] --strategy random --max-fraction 0.15 --steps 10 --min-size 2 --eff-samples 20 --seed 42
 ic report --city [nome_cidade]
 ic report --city [nome_cidade] --year [ano]

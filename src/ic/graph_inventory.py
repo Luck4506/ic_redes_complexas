@@ -259,6 +259,65 @@ def _add_existing_pipeline_outputs(summary_rows: list[list[Any]], city_id: str) 
         except ValueError:
             pass
 
+    for strategy in ["targeted", "targeted_adaptive", "random"]:
+        summaries = _read_csv_dicts(f"{metrics_dir}/intra_community_resilience_summary_{strategy}.csv")
+        if not summaries:
+            _add_metric(
+                summary_rows,
+                "resiliencia_interna_comunidades",
+                f"intra_community_resilience_{strategy}_available",
+                "nao",
+                "booleano",
+                f"Arquivo intra_community_resilience_summary_{strategy}.csv nao encontrado.",
+            )
+            continue
+
+        def numeric_values(key: str) -> list[float]:
+            values = []
+            for row in summaries:
+                try:
+                    values.append(float(row.get(key, "")))
+                except ValueError:
+                    pass
+            return values
+
+        auc_values = numeric_values("resilience_auc_lcc")
+        final_lcc_values = numeric_values("final_lcc_fraction")
+        _add_metric(
+            summary_rows,
+            "resiliencia_interna_comunidades",
+            f"intra_community_resilience_{strategy}_communities",
+            len(summaries),
+            "comunidades",
+            f"Quantidade de comunidades com resiliência interna calculada na estratégia {strategy}.",
+        )
+        if auc_values:
+            _add_metric(
+                summary_rows,
+                "resiliencia_interna_comunidades",
+                f"intra_community_resilience_{strategy}_auc_lcc_mean",
+                sum(auc_values) / len(auc_values),
+                "razao",
+                f"Média da AUC normalizada da LCC entre comunidades na estratégia {strategy}.",
+            )
+            _add_metric(
+                summary_rows,
+                "resiliencia_interna_comunidades",
+                f"intra_community_resilience_{strategy}_auc_lcc_min",
+                min(auc_values),
+                "razao",
+                f"Menor AUC normalizada da LCC entre comunidades na estratégia {strategy}.",
+            )
+        if final_lcc_values:
+            _add_metric(
+                summary_rows,
+                "resiliencia_interna_comunidades",
+                f"intra_community_resilience_{strategy}_final_lcc_mean",
+                sum(final_lcc_values) / len(final_lcc_values),
+                "percentual",
+                f"Média da fração final da LCC entre comunidades na estratégia {strategy}.",
+            )
+
 
 def _counter_rows(counter: dict[str, dict[str, float]], total_edges: int, total_length_m: float) -> list[list[Any]]:
     rows = []

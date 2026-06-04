@@ -206,6 +206,11 @@ def gerar_dashboard_html(city_id: str) -> dict:
     comm_res_target_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_targeted.csv")
     comm_res_target_adaptive_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_targeted_adaptive.csv")
     comm_res_random_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_random.csv")
+    intra_comm_target_rows = _read_csv_dicts(f"{metrics_dir}/intra_community_resilience_summary_targeted.csv")
+    intra_comm_target_adaptive_rows = _read_csv_dicts(
+        f"{metrics_dir}/intra_community_resilience_summary_targeted_adaptive.csv"
+    )
+    intra_comm_random_rows = _read_csv_dicts(f"{metrics_dir}/intra_community_resilience_summary_random.csv")
 
     cards = [
         _card("Nos", _metric(summary, "nodes"), "Intersecoes/pontos do grafo"),
@@ -261,6 +266,9 @@ def gerar_dashboard_html(city_id: str) -> dict:
         _table("Resiliencia por Comunidades - Dirigida", comm_res_target_rows),
         _table("Resiliencia por Comunidades - Dirigida Adaptativa", comm_res_target_adaptive_rows),
         _table("Resiliencia por Comunidades - Aleatoria", comm_res_random_rows),
+        _table("Resiliencia Interna por Comunidade - Dirigida", intra_comm_target_rows),
+        _table("Resiliencia Interna por Comunidade - Dirigida Adaptativa", intra_comm_target_adaptive_rows),
+        _table("Resiliencia Interna por Comunidade - Aleatoria", intra_comm_random_rows),
         _image_panel("Distribuicao de Graus", f"{figures_dir}/degree_distribution_loglog.png", outputs_root),
         _image_panel("Resiliencia - Dirigida", f"{figures_dir}/resilience_curve_targeted.png", outputs_root),
         _image_panel("Resiliencia - Dirigida Adaptativa", f"{figures_dir}/resilience_curve_targeted_adaptive.png", outputs_root),
@@ -268,6 +276,9 @@ def gerar_dashboard_html(city_id: str) -> dict:
         _image_panel("Resiliencia por Comunidades - Dirigida", f"{figures_dir}/community_resilience_curve_targeted.png", outputs_root),
         _image_panel("Resiliencia por Comunidades - Dirigida Adaptativa", f"{figures_dir}/community_resilience_curve_targeted_adaptive.png", outputs_root),
         _image_panel("Resiliencia por Comunidades - Aleatoria", f"{figures_dir}/community_resilience_curve_random.png", outputs_root),
+        _image_panel("Resiliencia Interna por Comunidade - Dirigida", f"{figures_dir}/intra_community_resilience_targeted.png", outputs_root),
+        _image_panel("Resiliencia Interna por Comunidade - Dirigida Adaptativa", f"{figures_dir}/intra_community_resilience_targeted_adaptive.png", outputs_root),
+        _image_panel("Resiliencia Interna por Comunidade - Aleatoria", f"{figures_dir}/intra_community_resilience_random.png", outputs_root),
         _image_panel("Grafo - Ruas", f"{figures_dir}/grafo_{city_id}_clean_ruas.png", outputs_root),
         _image_panel("Grafo - Ruas e Nos", f"{figures_dir}/grafo_{city_id}_clean_ruas_nos.png", outputs_root),
         _image_panel("Grafo - Comunidades", f"{figures_dir}/grafo_{city_id}_clean_comunidades.png", outputs_root),

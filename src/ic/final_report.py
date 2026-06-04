@@ -150,6 +150,12 @@ def gerar_relatorio_final(city_id: str) -> dict:
     comm_res_target_plot = f"{figs_dir}/community_resilience_curve_targeted.png"
     comm_res_target_adaptive_plot = f"{figs_dir}/community_resilience_curve_targeted_adaptive.png"
     comm_res_rand_plot = f"{figs_dir}/community_resilience_curve_random.png"
+    intra_comm_summary_target = f"{metrics_dir}/intra_community_resilience_summary_targeted.csv"
+    intra_comm_summary_target_adaptive = f"{metrics_dir}/intra_community_resilience_summary_targeted_adaptive.csv"
+    intra_comm_summary_random = f"{metrics_dir}/intra_community_resilience_summary_random.csv"
+    intra_comm_target_plot = f"{figs_dir}/intra_community_resilience_targeted.png"
+    intra_comm_target_adaptive_plot = f"{figs_dir}/intra_community_resilience_targeted_adaptive.png"
+    intra_comm_random_plot = f"{figs_dir}/intra_community_resilience_random.png"
 
     # --- E3 figura ---
     degree_plot = f"{figs_dir}/degree_distribution_loglog.png"
@@ -325,6 +331,36 @@ def gerar_relatorio_final(city_id: str) -> dict:
     comm_res_block.append(_fmt_md_table(comm_res_edges_rows))
     comm_res_block_md = "\n".join(comm_res_block)
 
+    intra_comm_block: List[str] = []
+    for label, summary_path, plot_path, command in [
+        ("Direcionada", intra_comm_summary_target, intra_comm_target_plot, "targeted"),
+        ("Direcionada adaptativa", intra_comm_summary_target_adaptive, intra_comm_target_adaptive_plot, "targeted_adaptive"),
+        ("Aleatória", intra_comm_summary_random, intra_comm_random_plot, "random"),
+    ]:
+        rows = _read_csv_rows(summary_path, limit=10)
+        if rows:
+            rows = _rename_header(
+                rows,
+                {
+                    "community_id": "comunidade",
+                    "nodes": "nós",
+                    "internal_edges": "arestas internas",
+                    "final_lcc_fraction": "LCC final",
+                    "lcc_fraction_drop": "queda LCC",
+                    "resilience_auc_lcc": "AUC resiliência LCC",
+                },
+            )
+            intra_comm_block.append(f"### {label}: comunidades mais frágeis\n")
+            intra_comm_block.append(_fmt_md_table(rows))
+            if Path(plot_path).exists():
+                intra_comm_block.append(f"\n- Figura: `{_rel_to_outputs(plot_path, outputs_root)}`")
+        else:
+            intra_comm_block.append(
+                f"### {label}\n_(não encontrado — execute `ic intra-community-resilience --strategy {command}`)_"
+            )
+        intra_comm_block.append("")
+    intra_comm_block_md = "\n".join(intra_comm_block)
+
     # Links/artefatos (sempre relativos ao outputs/<city>)
     links: List[str] = []
     if Path(degree_plot).exists():
@@ -336,7 +372,9 @@ def gerar_relatorio_final(city_id: str) -> dict:
     if Path(res_target_adaptive_plot).exists():
         links.append(f"- Resiliência adaptativa: `{_rel_to_outputs(res_target_adaptive_plot, outputs_root)}`")
     if Path(comm_res_target_plot).exists():
-        links.append(f"- Resiliência por comunidades: `{_rel_to_outputs(comm_res_target_plot, outputs_root)}`")
+        links.append(f"- Resiliência entre comunidades: `{_rel_to_outputs(comm_res_target_plot, outputs_root)}`")
+    if Path(intra_comm_target_plot).exists():
+        links.append(f"- Resiliência interna por comunidade: `{_rel_to_outputs(intra_comm_target_plot, outputs_root)}`")
     if Path(route_map).exists():
         links.append(f"- Mapa de rota (E4): `{_rel_to_outputs(route_map, outputs_root)}`")
     links.append(f"- Lista de arquivos gerados (manifest): `{_rel_to_outputs(manifest_txt, outputs_root)}`")
@@ -366,6 +404,8 @@ def gerar_relatorio_final(city_id: str) -> dict:
         "- **E5:** Centralidades (pontos críticos)\n"
         "- **E6:** Comunidades (modularidade)\n"
         "- **E7:** Resiliência (remoção de arestas)\n"
+        "- **E7C:** Resiliência entre comunidades (grafo agregado)\n"
+        "- **E7I:** Resiliência interna de cada comunidade\n"
         "- **E8:** Consolidação (este relatório)\n"
     )
 
@@ -395,10 +435,13 @@ def gerar_relatorio_final(city_id: str) -> dict:
     md.append("\n## 6. Resiliência (E7)\n")
     md.append(res_block_md)
 
-    md.append("\n## 7. Resiliência por comunidades (E7C)\n")
+    md.append("\n## 7. Resiliência entre comunidades (E7C)\n")
     md.append(comm_res_block_md)
 
-    md.append("\n## 8. Artefatos gerados\n")
+    md.append("\n## 8. Resiliência interna por comunidade (E7I)\n")
+    md.append(intra_comm_block_md)
+
+    md.append("\n## 9. Artefatos gerados\n")
     md.append(links_md)
 
     Path(report_md).write_text("\n".join(md) + "\n", encoding="utf-8")

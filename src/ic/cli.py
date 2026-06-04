@@ -9,6 +9,7 @@ from .metrics_structural import structural_metrics
 from .communities import detectar_comunidades
 from .resilience import testar_resiliencia
 from .community_resilience import testar_resiliencia_comunidades
+from .intra_community_resilience import testar_resiliencia_interna_comunidades
 from .final_report import gerar_relatorio_final
 from .plot_graph import plotar_grafos_png
 from .paths_accessibility import gerar_rota_distancia, Coordenada
@@ -100,6 +101,21 @@ def main() -> None:
     p_res_comm.add_argument("--steps", type=int, default=15)
     p_res_comm.add_argument("--min-size", type=int, default=30)
     p_res_comm.add_argument("--seed", type=int, default=42)
+
+    # --- Teste de resiliência dentro de cada comunidade ---
+    p_res_intra = sub.add_parser(
+        "intra-community-resilience",
+        help="E7I: resiliência interna de cada comunidade detectada.",
+    )
+    p_res_intra.add_argument("--city", required=True)
+    _add_year_argument(p_res_intra)
+    p_res_intra.add_argument("--strategy", choices=["random", "targeted", "targeted_adaptive"], default="targeted")
+    p_res_intra.add_argument("--max-fraction", type=float, default=0.15)
+    p_res_intra.add_argument("--steps", type=int, default=10)
+    p_res_intra.add_argument("--min-size", type=int, default=2)
+    p_res_intra.add_argument("--k-edge", type=int, default=40)
+    p_res_intra.add_argument("--eff-samples", type=int, default=20)
+    p_res_intra.add_argument("--seed", type=int, default=42)
 
     #--- Relatório final ---   
     p_rep = sub.add_parser("report", help="E8: gerar relatório consolidado (Markdown) + manifest.")
@@ -246,6 +262,25 @@ def main() -> None:
         print("Curva CSV:", res["curve_csv"])
         print("Resumo comunidades:", res["summary_csv"])
         print("Top conexões:", res["top_edges_csv"])
+        print("Figura:", res["curve_plot"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "intra-community-resilience":
+        res = testar_resiliencia_interna_comunidades(
+            city_id=_dataset_city(args),
+            strategy=args.strategy,
+            max_fraction=args.max_fraction,
+            steps=args.steps,
+            min_size=args.min_size,
+            k_edge=args.k_edge,
+            efficiency_samples=args.eff_samples,
+            seed=args.seed,
+        )
+        print("\n[E7I] Resiliência interna das comunidades concluída ✅")
+        print("Comunidades analisadas:", res["communities_analyzed"])
+        print("Curvas CSV:", res["curve_csv"])
+        print("Resumo CSV:", res["summary_csv"])
         print("Figura:", res["curve_plot"])
         print("Relatório:", res["report_txt"])
         return

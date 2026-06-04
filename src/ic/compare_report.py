@@ -52,6 +52,11 @@ COMPARISON_METRICS = [
     ("resiliencia_comunidades", "community_resilience_targeted_adaptive_final_efficiency_topological_retained", "Eficiencia comunidades adaptativa", "Fracao da eficiencia topologica retida no ataque adaptativo entre comunidades."),
     ("resiliencia_comunidades", "community_resilience_random_final_lcc_nodes_fraction", "LCC final comunidades aleatoria", "Fracao ponderada por nos na maior componente com remocao aleatoria."),
     ("resiliencia_comunidades", "community_resilience_random_lcc_nodes_fraction_drop", "Queda LCC comunidades aleatoria", "Queda da fracao ponderada por nos no grafo de comunidades."),
+    ("resiliencia_interna_comunidades", "intra_community_resilience_targeted_auc_lcc_mean", "AUC media interna dirigida", "Media da resiliencia interna das comunidades sob remocao dirigida."),
+    ("resiliencia_interna_comunidades", "intra_community_resilience_targeted_auc_lcc_min", "Menor AUC interna dirigida", "Comunidade mais fragil sob remocao dirigida."),
+    ("resiliencia_interna_comunidades", "intra_community_resilience_targeted_final_lcc_mean", "LCC final interna media dirigida", "Media da fracao final da maior componente dentro de cada comunidade."),
+    ("resiliencia_interna_comunidades", "intra_community_resilience_targeted_adaptive_auc_lcc_mean", "AUC media interna adaptativa", "Media da resiliencia interna das comunidades sob remocao adaptativa."),
+    ("resiliencia_interna_comunidades", "intra_community_resilience_random_auc_lcc_mean", "AUC media interna aleatoria", "Baseline aleatorio medio da resiliencia interna das comunidades."),
 ]
 
 
@@ -223,6 +228,12 @@ def _artifact_path(dataset: str, kind: str) -> Path:
         return Path(f"outputs/{dataset}/figures/community_resilience_curve_targeted_adaptive.png")
     if kind == "community_resilience_random":
         return Path(f"outputs/{dataset}/figures/community_resilience_curve_random.png")
+    if kind == "intra_community_resilience_targeted":
+        return Path(f"outputs/{dataset}/figures/intra_community_resilience_targeted.png")
+    if kind == "intra_community_resilience_targeted_adaptive":
+        return Path(f"outputs/{dataset}/figures/intra_community_resilience_targeted_adaptive.png")
+    if kind == "intra_community_resilience_random":
+        return Path(f"outputs/{dataset}/figures/intra_community_resilience_random.png")
     if kind == "route_map":
         return Path(f"outputs/{dataset}/maps/rota_distancia.html")
     if kind == "critical_map":
@@ -290,6 +301,9 @@ def _side_by_side_dashboard(datasets: list[str], output_path: str) -> str:
         _visual_compare_block("Resiliencia por Comunidades - Dirigida", datasets, "community_resilience_targeted", "image", output_path),
         _visual_compare_block("Resiliencia por Comunidades - Dirigida Adaptativa", datasets, "community_resilience_targeted_adaptive", "image", output_path),
         _visual_compare_block("Resiliencia por Comunidades - Aleatoria", datasets, "community_resilience_random", "image", output_path),
+        _visual_compare_block("Resiliencia Interna por Comunidade - Dirigida", datasets, "intra_community_resilience_targeted", "image", output_path),
+        _visual_compare_block("Resiliencia Interna por Comunidade - Dirigida Adaptativa", datasets, "intra_community_resilience_targeted_adaptive", "image", output_path),
+        _visual_compare_block("Resiliencia Interna por Comunidade - Aleatoria", datasets, "intra_community_resilience_random", "image", output_path),
         _visual_compare_block("Mapa de Rota", datasets, "route_map", "iframe", output_path),
         _visual_compare_block("Mapa de Pontos Criticos", datasets, "critical_map", "iframe", output_path),
         _visual_compare_block("Mapa de Comunidades", datasets, "communities_map", "iframe", output_path),
