@@ -7,45 +7,60 @@ Viária Urbana Brasileira Utilizando Métricas de Redes Complexas**.
 
 Período formal informado no PDF: **1º de setembro de 2026 a 31 de agosto de 2027**.
 
+Observação: a etapa computacional, que exclui escrita acadêmica e avaliação humana e considera
+somente o sistema que gera dados para análise posterior, foi fechada em
+[`docs/lacunas_computacionais_escopo_ic.md`](lacunas_computacionais_escopo_ic.md).
+
 ## Conclusão executiva
 
 O repositório já possui uma base computacional forte e cobre grande parte da aquisição,
 processamento, cálculo de métricas e visualização. Entretanto, o escopo original ainda não
 está concluído.
 
-As principais lacunas obrigatórias são:
+Após as melhorias de 4 de junho de 2026, as principais lacunas restantes estão no plano
+acadêmico/metodológico, não na geração computacional dos dados:
 
-1. centralidades de proximidade e autovetor;
-2. resiliência por remoção de vértices;
-3. protocolo comparativo padronizado entre cidades;
-4. análise científica dos padrões, além da geração de tabelas;
-5. relação entre propriedades topológicas e características funcionais;
-6. avaliação quantitativa e qualitativa formal;
-7. documentação metodológica e reprodutibilidade experimental;
-8. produtos acadêmicos previstos nas atividades A1 a A8.
+1. análise científica dos padrões, além da geração de tabelas;
+2. avaliação quantitativa e qualitativa formal;
+3. documentação metodológica e reprodutibilidade experimental;
+4. produtos acadêmicos previstos nas atividades A1 a A8.
 
-A análise histórica é uma expansão válida, mas não deve receber prioridade até que esses itens
-do escopo original estejam completos.
+Já foram implementados: centralidades de proximidade e autovetor, protocolo/auditoria de
+comparabilidade, datasets municipais padronizados, análise descritiva topologia-função,
+validação quantitativa das aproximações, comunidades nos datasets administrativos,
+resiliência por comunidades, estatísticas agregadas de ataques aleatórios, mapa de arestas
+críticas, manifesto experimental, CSV comparativo consolidado e índice composto de
+vulnerabilidade viária, além da análise de pontes, articulações, gargalos estruturais e
+redundância de rotas, com análise multiescala por células espaciais, robustez espacial por
+bloqueios regionais, análise de hierarquia viária por classes OSM `highway` e morfologia
+urbana por padrões espaciais da rede, além de eficiência estatística de rotas em múltiplos
+pares origem-destino e similaridade estrutural entre cidades.
+Também foram adicionadas detecção de subcentros topológicos, centralidade policêntrica,
+exposição da rede a barreiras urbanas prováveis por baixa permeabilidade espacial e perfil de
+escala da rede viária.
+
+A análise histórica é uma expansão válida, mas deve ser usada somente após auditoria de
+cobertura OSM, pois anos antigos podem refletir evolução do mapeamento, não evolução urbana.
 
 ## Matriz dos objetivos específicos
 
 | Requisito explícito do PDF | Estado | Evidência atual | O que falta para concluir |
 |---|---|---|---|
 | Distribuição de graus | Implementado | CSV e gráfico log-log | Interpretar e comparar os padrões entre cidades |
-| Coeficiente de aglomeração | Implementado parcialmente | Transitividade e clustering aproximado | Validar a aproximação e justificar qual indicador será usado |
-| Comprimento médio de caminhos | Implementado parcialmente | Estimativa por amostragem, em hops e metros | Estudo de sensibilidade, incerteza e padronização entre cidades |
-| Diâmetro da rede | Implementado parcialmente | Estimativa por amostragem | Validar erro/estabilidade e documentar que não é diâmetro exato |
+| Coeficiente de aglomeração | Implementado parcialmente | Transitividade, clustering aproximado e estudo de sensibilidade | A validação mostrou instabilidade do clustering aproximado; justificar o indicador ou ampliar amostras |
+| Comprimento médio de caminhos | Implementado | Estimativa por amostragem, em hops e metros, com validação | Interpretar resultados e limitações |
+| Diâmetro da rede | Implementado | Estimativa por amostragem com validação | Interpretar resultados e documentar que não é diâmetro exato no grafo completo |
 | Assortatividade | Implementado | Assortatividade por grau | Interpretar e comparar resultados |
-| Centralidade de grau | Implementado | Calculada para nós selecionados | Salvar ranking completo ou resumo comparável |
-| Centralidade de intermediação | Implementado parcialmente | Betweenness aproximada de nós e arestas | Validar amostragem e mapear também vias críticas com atributos viários |
-| Centralidade de proximidade | Ausente | Não calculada | Implementar, documentar e integrar aos relatórios/mapas |
-| Centralidade de autovetor | Ausente | Não calculada | Implementar, documentar e integrar aos relatórios/mapas |
-| Resiliência por remoção de arestas | Implementado parcialmente | Estratégias aleatória, dirigida e adaptativa | Repetir ataques aleatórios e quantificar incerteza |
-| Resiliência por remoção de vértices | Ausente | Não há remoção de nós | Implementar ataques aleatórios e dirigidos, curvas e mapas |
-| Comparação entre diferentes cidades | Implementado parcialmente | Comparador HTML para Campinas, Jundiaí, Sorocaba e Valinhos | Padronizar recortes, completar experimentos e interpretar padrões |
+| Centralidade de grau | Implementado | Ranking completo e resumo comparável | Interpretar resultados |
+| Centralidade de intermediação | Implementado | Betweenness aproximada validada de nós e arestas; mapa de arestas críticas | Interpretar resultados |
+| Centralidade de proximidade | Implementado | Closeness aproximada, ranking completo e validação | Interpretar resultados e manter parâmetros padronizados |
+| Centralidade de autovetor | Implementado | Cálculo espectral, ranking completo e integração | Interpretar resultados |
+| Resiliência por remoção de arestas | Implementado | Estratégias aleatória, dirigida e adaptativa; repetição aleatória com 5 sementes | Interpretar resultados |
+| Resiliência por remoção de vértices | Implementado | Ataques aleatório, dirigido estático e adaptativo, curvas e rankings de remoção | Interpretar e comparar com a remoção de arestas |
+| Comparação entre diferentes cidades | Implementado | Datasets administrativos padronizados, auditoria, comparador HTML e CSV consolidado | Interpretar padrões |
 | Identificar padrões universais e especificidades locais | Ausente como resultado científico | Existem tabelas comparativas | Formular hipóteses, normalizar métricas e produzir análise/conclusões |
-| Visualizações interativas | Implementado | Dashboards e mapas Folium | Melhorar consistência e garantir cobertura completa em todas as cidades |
-| Relação entre topologia e características funcionais | Ausente/parcial | Inventário possui `highway`, `maxspeed`, `lanes`, `oneway` e `surface` | Executar análises relacionando esses atributos às métricas topológicas |
+| Visualizações interativas | Implementado | Dashboards, mapas Folium, comunidades e arestas críticas | Interpretar resultados |
+| Relação entre topologia e características funcionais | Implementado descritivamente | Grupos e correlações de Spearman para atributos OSM | Interpretar com cautela e incorporar outras fontes funcionais futuramente |
 
 ## Matriz das atividades A1 a A8
 
@@ -55,7 +70,7 @@ do escopo original estejam completos.
 | A2 - Participação no encontro de IC | Ainda não aplicável | É atividade acadêmica futura, não uma funcionalidade de software |
 | A3 - Estudo dos conceitos de Teoria dos Grafos | Parcial | Os conceitos aparecem no código, mas falta documentação teórica e justificativa metodológica |
 | A4 - Relatório parcial | Ainda não aplicável | O gerador atual produz inventário técnico, não um relatório parcial acadêmico |
-| A5 - Aplicação das métricas | Parcial avançado | Faltam proximidade, autovetor, remoção de vértices e fechamento comparativo |
+| A5 - Aplicação das métricas | Parcial avançado | Falta o fechamento analítico comparativo |
 | A6 - Avaliação quantitativa e qualitativa | Ausente | Falta protocolo, perguntas de pesquisa, hipóteses, critérios e discussão |
 | A7 - Artigo científico | Ainda não iniciado | Deve ser produzido após consolidar método e resultados |
 | A8 - Relatório final | Ainda não aplicável | O Markdown atual é um relatório automático de artefatos, não o relatório científico final |
@@ -104,36 +119,28 @@ universais. Para isso, é necessário:
 
 **Estado: parcial.**
 
-Já há mapa de nós críticos por betweenness e rankings de arestas. Falta:
-
-- mapear visualmente as arestas/vias críticas;
-- incluir nome, tipo e atributos das vias;
-- incorporar criticidade por remoção de vértices;
-- comparar criticidade entre diferentes centralidades;
-- explicar por que cada elemento é crítico e qual impacto sua remoção produz.
+Já há mapa de nós críticos por betweenness, ranking de arestas e mapa próprio de
+arestas/vias críticas com nome, tipo, comprimento, ranking e score quando os atributos existem
+no OSM. A parte computacional está coberta; falta a interpretação científica desses elementos.
 
 ### Códigos reprodutíveis e dashboards
 
 **Estado: implementado parcialmente.**
 
-Os dashboards existem, mas a cobertura experimental é desigual. Campinas possui análises mais
-completas; Jundiaí, Sorocaba e Valinhos não possuem, por exemplo, resiliência adaptativa nem
-resiliência interna por comunidade. Antes da comparação final, todas as cidades devem passar
-pelo mesmo pipeline e pelos mesmos parâmetros.
+Os dashboards foram regenerados para os quatro datasets administrativos com cobertura
+experimental padronizada, incluindo comunidades, resiliência por arestas, vértices e
+comunidades, estatísticas aleatórias agregadas, mapas e manifestos.
 
 ## Problemas metodológicos que precisam ser resolvidos
 
-### 1. Recortes geográficos não padronizados
+### 1. Recortes geográficos padronizados, com conjunto legado preservado
 
-As quatro cidades usam caixas delimitadoras com dimensões diferentes. Isso pode incluir áreas
-fora do município e tornar diferenças de tamanho, densidade e caminhos consequência do
-recorte, não da estrutura urbana.
+Os datasets originais usam caixas delimitadoras com dimensões diferentes e permanecem
+exploratórios. O conjunto principal agora usa limites administrativos OSM para as quatro
+cidades e foi classificado como comparável pela auditoria automática.
 
-É necessário escolher e justificar um protocolo:
-
-- limites administrativos oficiais/OSM; ou
-- recortes de mesma área; ou
-- análise em múltiplas escalas.
+Ainda é necessário justificar formalmente essa escolha no texto científico e normalizar
+métricas dependentes do tamanho do município.
 
 ### 2. Representação do grafo
 
@@ -150,27 +157,25 @@ O trabalho precisa justificar essa transformação e separar claramente:
 - métricas topológicas no grafo simples não direcionado;
 - métricas funcionais no grafo direcionado e ponderado.
 
-### 3. Aproximações sem validação
+### 3. Aproximações validadas em subgrafo controlado
 
-Betweenness, clustering, caminhos, diâmetro e eficiência usam amostragens. Falta executar um
-estudo de sensibilidade, variando o número de amostras e medindo estabilidade dos rankings,
-valores e tempo de execução.
+O estudo de sensibilidade agora compara valores aproximados e exatos em subgrafo conectado,
+variando amostras, repetições e sementes. Betweenness e closeness apresentaram rankings
+estáveis; o clustering aproximado apresentou variação relevante e exige cautela. A validação
+não prova que o erro seja idêntico no grafo municipal completo.
 
-### 4. Ataque aleatório sem distribuição estatística
+### 4. Ataque aleatório com distribuição estatística básica
 
-Uma execução com uma semente não representa adequadamente um ataque aleatório. O resultado
-deve usar múltiplas repetições, média, desvio-padrão e intervalo de confiança.
+A etapa computacional agora repete ataques aleatórios com cinco sementes e gera média,
+desvio-padrão, mínimo, máximo e curvas agregadas. Isso reduz o risco de interpretar um único
+sorteio como característica estrutural da cidade. Intervalos de confiança formais podem ser
+adicionados futuramente se a análise estatística exigir mais repetições.
 
-### 5. Comparação incompleta entre cidades
+### 5. Comparação padronizada disponível, interpretação ainda incompleta
 
-Campinas possui resultados que ainda não existem para as demais cidades. Uma comparação
-final só é válida quando todos os datasets usam:
-
-- mesma versão dos dados ou datas explicitamente controladas;
-- mesmos parâmetros;
-- mesmas estratégias;
-- mesmo protocolo de recorte;
-- mesmas métricas e formatos de saída.
+Os quatro datasets administrativos usam a mesma data, parâmetros, protocolo de recorte,
+métricas e formatos de saída. A comparação computacional está pronta e inclui indicadores
+normalizados por área; ainda falta produzir a interpretação científica.
 
 ### 6. Cálculo não equivale a análise
 
@@ -184,33 +189,51 @@ Estas expansões são úteis e devem ser preservadas, mas não devem bloquear o 
 escopo original:
 
 - análise histórica de Campinas;
+- auditoria de qualidade da análise histórica OSM;
 - resiliência entre comunidades;
 - resiliência interna de cada comunidade;
 - inventário de superfície, faixas, velocidade e mão única;
 - exportação para Kepler.gl;
 - rotas multimodais;
-- comparadores visuais extensos.
+- comparadores visuais extensos;
+- índice composto de vulnerabilidade de nós e arestas;
+- pontes, articulações e gargalos estruturais;
+- perfil de redundância de rotas;
+- análise multiescala por grade espacial;
+- robustez espacial por bloqueios regionais;
+- análise de hierarquia viária;
+- comparação planejamento urbano x estrutura da rede por morfologia urbana;
+- eficiência de rotas em múltiplos pares origem-destino;
+- similaridade estrutural entre cidades por vetores de métricas;
+- detecção de subcentros e centralidade policêntrica;
+- exposição da rede a barreiras urbanas prováveis;
+- perfil de escala da rede viária.
 
 Algumas dessas expansões podem ajudar a cumprir o escopo. Por exemplo, os atributos viários
 do inventário podem ser usados para estabelecer relações entre topologia e características
 funcionais.
 
+## Observação sobre análise histórica OSM
+
+Foi implementado o comando `ic historical-audit` para evitar interpretar a incompletude do OSM
+antigo como mudança urbana. Para Campinas, a auditoria classificou 2010 a 2014 como
+**não confiável**, 2015 a 2020 como **exploratório** e 2021 a 2026 como **comparável com
+cautela**. Comparações históricas brutas anteriores a 2021 não devem ser usadas como evidência
+central de evolução urbana.
+
 ## Ordem recomendada para concluir o escopo original
 
 ### Fase 1 - Completar os requisitos explícitos
 
-1. Implementar centralidades de proximidade e autovetor.
-2. Implementar resiliência por remoção de vértices.
-3. Integrar as novas métricas ao inventário, mapas, relatório e dashboard.
-4. Criar testes unitários e de integração para essas etapas.
+1. Requisitos computacionais explícitos concluídos; manter testes adicionais de integração como melhoria de engenharia.
 
 ### Fase 2 - Tornar os experimentos cientificamente válidos
 
-1. Definir protocolo padronizado de recorte das cidades.
-2. Criar manifesto completo de cada experimento.
-3. Implementar repetições estatísticas dos ataques aleatórios.
-4. Executar estudo de sensibilidade das métricas aproximadas.
-5. Reprocessar todas as cidades com o mesmo pipeline e parâmetros.
+1. Protocolo padronizado de recorte das cidades implementado para os datasets administrativos.
+2. Manifesto experimental JSON implementado.
+3. Repetições estatísticas dos ataques aleatórios implementadas.
+4. Estudo de sensibilidade das métricas aproximadas implementado.
+5. Cidades administrativas reprocessadas com pipeline e parâmetros padronizados.
 
 ### Fase 3 - Responder ao objetivo científico
 

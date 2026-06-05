@@ -8,6 +8,7 @@ from .preprocess import preprocess_city
 from .metrics_structural import structural_metrics
 from .communities import detectar_comunidades
 from .resilience import testar_resiliencia
+from .node_resilience import testar_resiliencia_vertices
 from .community_resilience import testar_resiliencia_comunidades
 from .intra_community_resilience import testar_resiliencia_interna_comunidades
 from .final_report import gerar_relatorio_final
@@ -18,6 +19,23 @@ from .kepler_export import exportar_para_kepler
 from .graph_inventory import gerar_planilha_grafo
 from .html_report import gerar_dashboard_html
 from .compare_report import gerar_comparacao_html
+from .functional_relations import analisar_relacoes_funcionais
+from .approximation_validation import validar_aproximacoes
+from .comparison_protocol import auditar_comparabilidade
+from .historical_quality import auditar_qualidade_historica
+from .random_resilience_stats import gerar_estatisticas_resiliencia_aleatoria
+from .vulnerability_index import calcular_indice_vulnerabilidade
+from .structural_bottlenecks import analisar_gargalos_estruturais
+from .route_redundancy import analisar_redundancia_rotas
+from .spatial_multiscale import analisar_multiescala_espacial
+from .spatial_robustness import simular_robustez_espacial
+from .road_hierarchy import analisar_hierarquia_viaria
+from .urban_morphology import analisar_morfologia_urbana
+from .od_efficiency import analisar_eficiencia_od
+from .city_similarity import analisar_similaridade_cidades
+from .subcenters import detectar_subcentros
+from .urban_barriers import analisar_barreiras_urbanas
+from .network_scale_profile import analisar_perfil_escala_rede
 
 
 def _add_year_argument(parser: argparse.ArgumentParser) -> None:
@@ -71,6 +89,7 @@ def main() -> None:
     p_cent.add_argument("--top-k", type=int, default=30)
     p_cent.add_argument("--k-b", type=int, default=120)  # deixe menor no dev
     p_cent.add_argument("--k-e", type=int, default=60)   # deixe menor no dev
+    p_cent.add_argument("--k-c", type=int, default=120, help="Landmarks para closeness aproximada.")
     p_cent.add_argument("--seed", type=int, default=42)
 
     # --- Detecção de comunidades ---
@@ -91,6 +110,17 @@ def main() -> None:
     p_res.add_argument("--k-edge", type=int, default=80)
     p_res.add_argument("--eff-samples", type=int, default=20)
     p_res.add_argument("--seed", type=int, default=42)
+
+    # --- Teste de resiliência por remoção exclusiva de vértices ---
+    p_node_res = sub.add_parser("node-resilience", help="E7V: teste de resiliência removendo apenas vértices.")
+    p_node_res.add_argument("--city", required=True)
+    _add_year_argument(p_node_res)
+    p_node_res.add_argument("--strategy", choices=["random", "targeted", "targeted_adaptive"], default="targeted")
+    p_node_res.add_argument("--max-fraction", type=float, default=0.15)
+    p_node_res.add_argument("--steps", type=int, default=15)
+    p_node_res.add_argument("--k-node", type=int, default=80)
+    p_node_res.add_argument("--eff-samples", type=int, default=20)
+    p_node_res.add_argument("--seed", type=int, default=42)
 
     # --- Teste de resiliência no grafo agregado de comunidades ---
     p_res_comm = sub.add_parser("community-resilience", help="E7C: resiliência entre comunidades detectadas.")
@@ -148,6 +178,151 @@ def main() -> None:
     p_compare = sub.add_parser("compare", help="Gera um HTML comparativo entre dois ou mais datasets já processados.")
     p_compare.add_argument("datasets", nargs="+", help="Ex.: campinas_2021 campinas_2024 sorocaba")
     p_compare.add_argument("--output", help="Caminho opcional do HTML de saída.")
+
+    p_similarity = sub.add_parser(
+        "city-similarity",
+        help="Cria vetores de métricas por cidade e calcula distância, similaridade, PCA e clustering.",
+    )
+    p_similarity.add_argument("datasets", nargs="+", help="Ex.: campinas_admin jundiai_admin sorocaba_admin")
+    p_similarity.add_argument("--output-dir", default="outputs/comparisons")
+    p_similarity.add_argument("--min-coverage", type=float, default=1.0)
+
+    p_functional = sub.add_parser("functional-relations", help="Relaciona atributos OSM e posição topológica.")
+    p_functional.add_argument("--city", required=True)
+    _add_year_argument(p_functional)
+
+    p_validate = sub.add_parser("validate-approximations", help="Valida métricas aproximadas em subgrafo controlado.")
+    p_validate.add_argument("--city", required=True)
+    _add_year_argument(p_validate)
+    p_validate.add_argument("--subgraph-size", type=int, default=400)
+    p_validate.add_argument("--samples", type=int, nargs="+", default=[10, 30, 60, 120])
+    p_validate.add_argument("--repeats", type=int, default=3)
+    p_validate.add_argument("--seed", type=int, default=42)
+
+    p_audit = sub.add_parser("comparison-audit", help="Audita se datasets podem ser comparados cientificamente.")
+    p_audit.add_argument("datasets", nargs="+")
+    p_audit.add_argument("--output")
+
+    p_hist_audit = sub.add_parser("historical-audit", help="Audita viés de cobertura OSM em comparações temporais.")
+    p_hist_audit.add_argument("--reference", required=True, help="Dataset de referência atual. Ex.: campinas")
+    p_hist_audit.add_argument("datasets", nargs="+", help="Datasets históricos. Ex.: campinas_2014 campinas_2024")
+    p_hist_audit.add_argument("--output-dir", default="outputs/comparisons")
+
+    p_random_stats = sub.add_parser(
+        "random-resilience-stats",
+        help="Repete ataques aleatórios com múltiplas sementes e agrega estatísticas.",
+    )
+    p_random_stats.add_argument("--city", required=True)
+    _add_year_argument(p_random_stats)
+    p_random_stats.add_argument("--mode", choices=["edge", "node", "both"], default="both")
+    p_random_stats.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44, 45, 46])
+    p_random_stats.add_argument("--max-fraction", type=float, default=0.15)
+    p_random_stats.add_argument("--steps", type=int, default=15)
+    p_random_stats.add_argument("--k-edge", type=int, default=80)
+    p_random_stats.add_argument("--k-node", type=int, default=80)
+    p_random_stats.add_argument("--eff-samples", type=int, default=20)
+
+    p_vulnerability = sub.add_parser(
+        "vulnerability-index",
+        help="Gera índice composto de vulnerabilidade de nós e arestas.",
+    )
+    p_vulnerability.add_argument("--city", required=True)
+    _add_year_argument(p_vulnerability)
+    p_vulnerability.add_argument("--top-k", type=int, default=100)
+
+    p_bottlenecks = sub.add_parser(
+        "structural-bottlenecks",
+        help="Identifica pontes, articulações e gargalos estruturais.",
+    )
+    p_bottlenecks.add_argument("--city", required=True)
+    _add_year_argument(p_bottlenecks)
+    p_bottlenecks.add_argument("--top-k", type=int, default=100)
+
+    p_route_redundancy = sub.add_parser(
+        "route-redundancy",
+        help="Avalia alternativas de rota quando a melhor rota é bloqueada.",
+    )
+    p_route_redundancy.add_argument("--city", required=True)
+    _add_year_argument(p_route_redundancy)
+    p_route_redundancy.add_argument("--pairs", type=int, default=100)
+    p_route_redundancy.add_argument("--threshold", type=float, default=1.50)
+    p_route_redundancy.add_argument("--seed", type=int, default=42)
+    p_route_redundancy.add_argument("--map-limit", type=int, default=20)
+
+    p_spatial = sub.add_parser(
+        "spatial-multiscale",
+        help="Calcula métricas locais por grade espacial.",
+    )
+    p_spatial.add_argument("--city", required=True)
+    _add_year_argument(p_spatial)
+    p_spatial.add_argument("--cell-size-m", type=float, default=1000.0)
+
+    p_spatial_robustness = sub.add_parser(
+        "spatial-robustness",
+        help="Simula bloqueios regionais por célula espacial e mede impacto global.",
+    )
+    p_spatial_robustness.add_argument("--city", required=True)
+    _add_year_argument(p_spatial_robustness)
+    p_spatial_robustness.add_argument("--cell-size-m", type=float, default=1000.0)
+    p_spatial_robustness.add_argument("--mode", choices=["incident", "internal"], default="incident")
+    p_spatial_robustness.add_argument("--eff-samples", type=int, default=10)
+    p_spatial_robustness.add_argument("--max-eff-cells", type=int, default=100)
+    p_spatial_robustness.add_argument("--seed", type=int, default=42)
+
+    p_road_hierarchy = sub.add_parser(
+        "road-hierarchy",
+        help="Analisa contribuição de classes highway para conectividade, centralidade e resiliência.",
+    )
+    p_road_hierarchy.add_argument("--city", required=True)
+    _add_year_argument(p_road_hierarchy)
+    p_road_hierarchy.add_argument("--eff-samples", type=int, default=20)
+    p_road_hierarchy.add_argument("--seed", type=int, default=42)
+    p_road_hierarchy.add_argument("--map-edges-per-class", type=int, default=1200)
+
+    p_urban_morphology = sub.add_parser(
+        "urban-morphology",
+        help="Classifica padrões urbanos locais por orientação, entropia angular e conectividade.",
+    )
+    p_urban_morphology.add_argument("--city", required=True)
+    _add_year_argument(p_urban_morphology)
+    p_urban_morphology.add_argument("--cell-size-m", type=float, default=1000.0)
+
+    p_od_efficiency = sub.add_parser(
+        "od-efficiency",
+        help="Amostra múltiplos pares origem-destino e mede eficiência estatística de rotas.",
+    )
+    p_od_efficiency.add_argument("--city", required=True)
+    _add_year_argument(p_od_efficiency)
+    p_od_efficiency.add_argument("--pairs", type=int, default=1000)
+    p_od_efficiency.add_argument("--seed", type=int, default=42)
+    p_od_efficiency.add_argument("--map-limit", type=int, default=80)
+
+    p_subcenters = sub.add_parser(
+        "subcenters",
+        help="Detecta subcentros topológicos e mede centralidade policêntrica.",
+    )
+    p_subcenters.add_argument("--city", required=True)
+    _add_year_argument(p_subcenters)
+    p_subcenters.add_argument("--cell-size-m", type=float, default=1000.0)
+    p_subcenters.add_argument("--percentile", type=float, default=0.90)
+    p_subcenters.add_argument("--min-nodes", type=int, default=20)
+
+    p_urban_barriers = sub.add_parser(
+        "urban-barriers",
+        help="Infere barreiras urbanas prováveis por baixa permeabilidade espacial da rede.",
+    )
+    p_urban_barriers.add_argument("--city", required=True)
+    _add_year_argument(p_urban_barriers)
+    p_urban_barriers.add_argument("--cell-size-m", type=float, default=1000.0)
+    p_urban_barriers.add_argument("--map-limit", type=int, default=250)
+
+    p_scale_profile = sub.add_parser(
+        "network-scale-profile",
+        help="Mede sensibilidade das métricas espaciais a diferentes tamanhos de célula.",
+    )
+    p_scale_profile.add_argument("--city", required=True)
+    _add_year_argument(p_scale_profile)
+    p_scale_profile.add_argument("--scales", type=float, nargs="+", default=[500.0, 1000.0, 2000.0, 3000.0])
 
     args = parser.parse_args()
 
@@ -210,13 +385,224 @@ def main() -> None:
             top_k=args.top_k,
             k_betweenness=args.k_b,
             k_edge_betweenness=args.k_e,
+            k_closeness=args.k_c,
             seed=args.seed,
         )
         print("\n[E5] Centralidades concluídas ✅")
         print("Top nós CSV:", res["top_nodes_csv"])
+        print("Centralidades completas:", res["all_nodes_csv"])
+        print("Rankings:", res["rankings_csv"])
         print("Top arestas CSV:", res["top_edges_csv"])
         print("Relatório:", res["report_txt"])
         print("Mapa:", res["map_html"])
+        print("Mapa de arestas:", res["edge_map_html"])
+        return
+
+    if args.cmd == "functional-relations":
+        res = analisar_relacoes_funcionais(_dataset_city(args))
+        print("\n[Relações funcionais] Análise concluída ✅")
+        print("Grupos:", res["grouped_csv"])
+        print("Correlações:", res["correlations_csv"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "validate-approximations":
+        res = validar_aproximacoes(
+            _dataset_city(args),
+            subgraph_size=args.subgraph_size,
+            sample_sizes=args.samples,
+            repeats=args.repeats,
+            seed=args.seed,
+        )
+        print("\n[Validação] Aproximações avaliadas ✅")
+        print("Resultados:", res["validation_csv"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "comparison-audit":
+        res = auditar_comparabilidade(args.datasets, output_path=args.output)
+        print("\n[Comparabilidade] Auditoria concluída")
+        print("Status:", res["status"])
+        print("CSV:", res["audit_csv"])
+        return
+
+    if args.cmd == "historical-audit":
+        res = auditar_qualidade_historica(args.reference, args.datasets, output_dir=args.output_dir)
+        print("\n[Histórico] Auditoria de qualidade OSM concluída")
+        print("Auditoria:", res["audit_csv"])
+        print("Núcleo comum:", res["common_core_csv"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "random-resilience-stats":
+        res = gerar_estatisticas_resiliencia_aleatoria(
+            city_id=_dataset_city(args),
+            mode=args.mode,
+            seeds=args.seeds,
+            max_fraction=args.max_fraction,
+            steps=args.steps,
+            k_edge=args.k_edge,
+            k_node=args.k_node,
+            efficiency_samples=args.eff_samples,
+        )
+        print("\n[ESTATÍSTICA] Resiliência aleatória agregada concluída ✅")
+        if "edge" in res:
+            print("Arestas CSV agregado:", res["edge"]["aggregate_csv"])
+        if "node" in res:
+            print("Vértices CSV agregado:", res["node"]["aggregate_csv"])
+        return
+
+    if args.cmd == "vulnerability-index":
+        res = calcular_indice_vulnerabilidade(_dataset_city(args), top_k=args.top_k)
+        print("\n[Vulnerabilidade] Índice composto gerado ✅")
+        print("Nós CSV:", res["node_csv"])
+        print("Arestas CSV:", res["edge_csv"])
+        print("Mapa nós:", res["node_map"])
+        print("Mapa arestas:", res["edge_map"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "structural-bottlenecks":
+        res = analisar_gargalos_estruturais(_dataset_city(args), top_k=args.top_k)
+        print("\n[Gargalos] Pontes, articulações e gargalos estruturais gerados ✅")
+        print("Articulações CSV:", res["articulations_csv"])
+        print("Pontes CSV:", res["bridges_csv"])
+        print("Gargalos CSV:", res["bottlenecks_csv"])
+        print("Mapa articulações:", res["articulations_map"])
+        print("Mapa pontes:", res["bridges_map"])
+        print("Mapa gargalos:", res["bottlenecks_map"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "route-redundancy":
+        res = analisar_redundancia_rotas(
+            _dataset_city(args),
+            pairs=args.pairs,
+            threshold=args.threshold,
+            seed=args.seed,
+            map_limit=args.map_limit,
+        )
+        print("\n[Rotas] Perfil de redundância gerado ✅")
+        print("Pares CSV:", res["pairs_csv"])
+        print("Resumo CSV:", res["summary_csv"])
+        print("Mapa:", res["map_html"])
+        print("Relatório:", res["report_txt"])
+        print("Alternativas razoáveis:", f"{res['reasonable_alternative_rate']:.4f}")
+        return
+
+    if args.cmd == "spatial-multiscale":
+        res = analisar_multiescala_espacial(_dataset_city(args), cell_size_m=args.cell_size_m)
+        print("\n[Espacial] Análise multiescala por grade gerada ✅")
+        print("Células CSV:", res["cells_csv"])
+        print("Resumo CSV:", res["summary_csv"])
+        print("Mapa vulnerabilidade:", res["vulnerability_map"])
+        print("Mapa conectividade:", res["connectivity_map"])
+        print("Mapa redundância:", res["redundancy_map"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "spatial-robustness":
+        res = simular_robustez_espacial(
+            _dataset_city(args),
+            cell_size_m=args.cell_size_m,
+            mode=args.mode,
+            efficiency_samples=args.eff_samples,
+            max_efficiency_cells=args.max_eff_cells,
+            seed=args.seed,
+        )
+        print("\n[Espacial] Robustez por bloqueios regionais gerada ✅")
+        print("Células CSV:", res["cells_csv"])
+        print("Resumo CSV:", res["summary_csv"])
+        print("Mapa LCC:", res["lcc_map"])
+        print("Mapa eficiência:", res["efficiency_map"])
+        print("Mapa fragmentação:", res["fragmentation_map"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "road-hierarchy":
+        res = analisar_hierarquia_viaria(
+            _dataset_city(args),
+            efficiency_samples=args.eff_samples,
+            seed=args.seed,
+            map_edges_per_class=args.map_edges_per_class,
+        )
+        print("\n[Hierarquia] Análise de hierarquia viária gerada ✅")
+        print("Por classe CSV:", res["by_class_csv"])
+        print("Resumo CSV:", res["summary_csv"])
+        print("Mapa:", res["map_html"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "urban-morphology":
+        res = analisar_morfologia_urbana(_dataset_city(args), cell_size_m=args.cell_size_m)
+        print("\n[Morfologia] Comparação planejamento urbano x estrutura da rede gerada ✅")
+        print("Células CSV:", res["cells_csv"])
+        print("Resumo CSV:", res["summary_csv"])
+        print("Mapa classes:", res["class_map"])
+        print("Mapa entropia:", res["entropy_map"])
+        print("Mapa conectividade:", res["connectivity_map"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "od-efficiency":
+        res = analisar_eficiencia_od(
+            _dataset_city(args),
+            pairs=args.pairs,
+            seed=args.seed,
+            map_limit=args.map_limit,
+        )
+        print("\n[OD] Eficiência de rotas em múltiplos pares gerada ✅")
+        print("Pares CSV:", res["pairs_csv"])
+        print("Resumo CSV:", res["summary_csv"])
+        print("Mapa:", res["map_html"])
+        print("Relatório:", res["report_txt"])
+        print("Pares amostrados:", res["sampled_pairs"])
+        return
+
+    if args.cmd == "subcenters":
+        res = detectar_subcentros(
+            _dataset_city(args),
+            cell_size_m=args.cell_size_m,
+            percentile=args.percentile,
+            min_nodes=args.min_nodes,
+        )
+        print("\n[Subcentros] Centralidade policêntrica gerada ✅")
+        print("Células CSV:", res["cells_csv"])
+        print("Subcentros CSV:", res["subcenters_csv"])
+        print("Resumo CSV:", res["summary_csv"])
+        print("Mapa:", res["map_html"])
+        print("Relatório:", res["report_txt"])
+        print("Subcentros detectados:", res["subcenters_count"])
+        return
+
+    if args.cmd == "urban-barriers":
+        res = analisar_barreiras_urbanas(
+            _dataset_city(args),
+            cell_size_m=args.cell_size_m,
+            map_limit=args.map_limit,
+        )
+        print("\n[Barreiras] Exposição da rede a barreiras urbanas gerada ✅")
+        print("Células CSV:", res["cells_csv"])
+        print("Conexões CSV:", res["connections_csv"])
+        print("Resumo CSV:", res["summary_csv"])
+        print("Mapa permeabilidade:", res["permeability_map"])
+        print("Mapa conexões:", res["connections_map"])
+        print("Relatório:", res["report_txt"])
+        print("Índice de permeabilidade:", res["spatial_permeability_index"])
+        return
+
+    if args.cmd == "network-scale-profile":
+        res = analisar_perfil_escala_rede(_dataset_city(args), scales_m=args.scales)
+        print("\n[Escala] Perfil de escala da rede viária gerado ✅")
+        print("CSV por escala:", res["scales_csv"])
+        print("CSV células:", res["cells_csv"])
+        print("CSV estabilidade:", res["stability_csv"])
+        print("CSV resumo:", res["summary_csv"])
+        print("Gráfico métricas:", res["metrics_plot"])
+        print("Gráfico estabilidade:", res["stability_plot"])
+        print("Mapa:", res["scale_map"])
+        print("Relatório:", res["report_txt"])
+        print("Índice multiescalar:", res["multiscale_robustness_index"])
         return
 
     if args.cmd == "communities":
@@ -245,6 +631,23 @@ def main() -> None:
         )
         print("\n[E7] Resiliência concluída ✅")
         print("Curva CSV:", res["curve_csv"])
+        print("Figura:", res["curve_plot"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "node-resilience":
+        res = testar_resiliencia_vertices(
+            city_id=_dataset_city(args),
+            strategy=args.strategy,
+            max_fraction=args.max_fraction,
+            steps=args.steps,
+            k_node=args.k_node,
+            efficiency_samples=args.eff_samples,
+            seed=args.seed,
+        )
+        print("\n[E7V] Resiliência por remoção de vértices concluída ✅")
+        print("Curva CSV:", res["curve_csv"])
+        print("Vértices removidos:", res["removed_nodes_csv"])
         print("Figura:", res["curve_plot"])
         print("Relatório:", res["report_txt"])
         return
@@ -290,6 +693,7 @@ def main() -> None:
         print("\n[E8] Relatório consolidado gerado ✅")
         print("Report:", res["report_md"])
         print("Manifest:", res["manifest_txt"])
+        print("Manifest JSON:", res["manifest_json"])
         return
     
     if args.cmd == "plot-graphs":
@@ -339,6 +743,24 @@ def main() -> None:
         print("\n[Compare] HTML comparativo gerado ✅")
         print("Datasets:", ", ".join(res["datasets"]))
         print("HTML:", res["compare_html"])
+        print("CSV:", res["compare_csv"])
+        return
+
+    if args.cmd == "city-similarity":
+        res = analisar_similaridade_cidades(
+            args.datasets,
+            output_dir=args.output_dir,
+            min_coverage=args.min_coverage,
+        )
+        print("\n[Similaridade] Análise entre cidades gerada ✅")
+        print("Métricas usadas:", res["metrics_used"])
+        print("HTML:", res["html"])
+        print("Vetores:", res["vectors_csv"])
+        print("Distâncias:", res["distances_csv"])
+        print("Similaridade cosseno:", res["similarities_csv"])
+        print("PCA:", res["pca_csv"])
+        print("Clusters:", res["clusters_csv"])
+        print("Relatório:", res["report_txt"])
         return
 
 if __name__ == "__main__":

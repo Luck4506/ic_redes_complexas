@@ -204,8 +204,26 @@ def download_from_config(config_path: str, year: int | str | None = None) -> Dic
         )
         clip_info = {"mode": "radius", "lat": lat, "lon": lon, "dist_meters": dist}
 
+    elif clip_mode == "place":
+        place_query = cfg["place_query"]
+        place_gdf = ox.geocode_to_gdf(place_query)
+        area_km2 = float(ox.projection.project_gdf(place_gdf).geometry.area.sum() / 1_000_000)
+        G = ox.graph_from_place(
+            place_query,
+            network_type=network_type,
+            simplify=simplify,
+            retain_all=True,
+            truncate_by_edge=False,
+        )
+        clip_info = {
+            "mode": "place",
+            "query": place_query,
+            "boundary": "administrative",
+            "area_km2": area_km2,
+        }
+
     else:
-        raise ValueError("clip_mode inválido. Use bbox ou radius.")
+        raise ValueError("clip_mode inválido. Use bbox, radius ou place.")
 
     graph_path = f"data/graphs/{dataset_id}_{network_type}_raw.graphml"
     meta_path = f"data/metadata/{dataset_id}_{network_type}_raw.json"

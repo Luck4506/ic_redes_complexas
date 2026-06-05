@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 from typing import Any
 
 from .graph_inventory import gerar_planilha_grafo
 from .html_report import _as_float, _e, _format_value, _read_csv_dicts
+from .comparison_protocol import auditar_comparabilidade
 
 
 COMPARISON_METRICS = [
@@ -12,6 +14,10 @@ COMPARISON_METRICS = [
     ("tamanho", "edges", "Arestas", "Quantidade de segmentos direcionados."),
     ("tamanho", "total_length_km", "Extensao total", "Soma dos comprimentos das arestas, em km."),
     ("tamanho", "named_streets_unique", "Vias nomeadas", "Nomes distintos de vias no OSM."),
+    ("normalizacao", "clip_area_km2", "Area do recorte", "Area do limite administrativo em km2."),
+    ("normalizacao", "nodes_per_km2", "Nos por km2", "Quantidade de nos normalizada pela area do recorte."),
+    ("normalizacao", "edges_per_km2", "Arestas por km2", "Quantidade de arestas direcionadas normalizada pela area do recorte."),
+    ("normalizacao", "total_length_km_per_km2", "Extensao por km2", "Extensao viaria direcionada normalizada pela area do recorte."),
     ("topologia", "degree_mean", "Grau medio", "Media do grau dos nos na maior componente."),
     ("topologia", "degree_max", "Grau maximo", "Maior grau observado."),
     ("topologia", "density", "Densidade", "Densidade do grafo nao direcionado."),
@@ -32,6 +38,12 @@ COMPARISON_METRICS = [
     ("comunidades", "communities_largest_pct", "Maior comunidade (%)", "Participacao da maior comunidade no total classificado."),
     ("centralidade", "centrality_top_node_betweenness", "Maior betweenness de no", "Betweenness do no mais critico salvo em top_nodes.csv."),
     ("centralidade", "centrality_top_edge_betweenness", "Maior edge betweenness", "Edge betweenness da aresta mais critica."),
+    ("centralidade", "centrality_top_closeness_approx_value", "Maior proximidade aproximada", "Maior centralidade de proximidade aproximada."),
+    ("centralidade", "centrality_top_eigenvector_value", "Maior centralidade de autovetor", "Maior centralidade de autovetor."),
+    ("topologia_funcao", "functional_maxspeed_betweenness_spearman", "Velocidade x intermediação", "Correlação de Spearman entre maxspeed e posição por intermediação."),
+    ("topologia_funcao", "functional_lanes_betweenness_spearman", "Faixas x intermediação", "Correlação de Spearman entre lanes e posição por intermediação."),
+    ("validacao", "validation_betweenness_rank_spearman_mean_at_120", "Validação da intermediação", "Correlação média do ranking aproximado de betweenness com o exato."),
+    ("validacao", "validation_closeness_rank_spearman_mean_at_120", "Validação da proximidade", "Correlação média do ranking aproximado de closeness com o exato."),
     ("resiliencia", "resilience_targeted_final_lcc_fraction", "LCC final dirigida", "Fracao da maior componente no fim da remocao dirigida."),
     ("resiliencia", "resilience_targeted_lcc_fraction_drop", "Queda LCC dirigida", "Queda da fracao da maior componente na remocao dirigida."),
     ("resiliencia", "resilience_targeted_final_efficiency_topological_retained", "Eficiencia topologica retida dirigida", "Fracao da eficiencia topologica preservada no fim da remocao dirigida."),
@@ -44,6 +56,24 @@ COMPARISON_METRICS = [
     ("resiliencia", "resilience_random_lcc_fraction_drop", "Queda LCC aleatoria", "Queda da fracao da maior componente na remocao aleatoria."),
     ("resiliencia", "resilience_random_final_efficiency_topological_retained", "Eficiencia topologica retida aleatoria", "Fracao da eficiencia topologica preservada no fim da remocao aleatoria."),
     ("resiliencia", "resilience_random_final_efficiency_length_retained", "Eficiencia por distancia retida aleatoria", "Fracao da eficiencia ponderada por distancia preservada no fim da remocao aleatoria."),
+    ("resiliencia_aleatoria_agregada", "resilience_random_aggregate_runs", "Repeticoes aleatorias arestas", "Quantidade de execucoes aleatorias agregadas por arestas."),
+    ("resiliencia_aleatoria_agregada", "resilience_random_final_lcc_fraction_mean", "LCC media aleatoria arestas", "Media final da LCC nas repeticoes aleatorias por arestas."),
+    ("resiliencia_aleatoria_agregada", "resilience_random_final_lcc_fraction_std", "Desvio LCC aleatoria arestas", "Desvio-padrao final da LCC nas repeticoes aleatorias por arestas."),
+    ("resiliencia_aleatoria_agregada", "resilience_random_final_efficiency_topological_retained_mean", "Eficiencia media aleatoria arestas", "Media final da eficiencia topologica retida nas repeticoes aleatorias por arestas."),
+    ("resiliencia_vertices", "node_resilience_targeted_final_lcc_fraction", "LCC final vértices dirigida", "Fração da maior componente após remoção dirigida de vértices."),
+    ("resiliencia_vertices", "node_resilience_targeted_lcc_fraction_drop", "Queda LCC vértices dirigida", "Queda da maior componente após remoção dirigida de vértices."),
+    ("resiliencia_vertices", "node_resilience_targeted_final_efficiency_topological_retained", "Eficiência vértices dirigida", "Eficiência topológica retida após remoção dirigida de vértices."),
+    ("resiliencia_vertices", "node_resilience_targeted_final_efficiency_length_retained", "Eficiência distância vértices dirigida", "Eficiência por distância retida após remoção dirigida de vértices."),
+    ("resiliencia_vertices", "node_resilience_targeted_adaptive_final_lcc_fraction", "LCC final vértices adaptativa", "Fração da maior componente após remoção adaptativa de vértices."),
+    ("resiliencia_vertices", "node_resilience_targeted_adaptive_lcc_fraction_drop", "Queda LCC vértices adaptativa", "Queda da maior componente após remoção adaptativa de vértices."),
+    ("resiliencia_vertices", "node_resilience_targeted_adaptive_final_efficiency_topological_retained", "Eficiência vértices adaptativa", "Eficiência topológica retida após remoção adaptativa de vértices."),
+    ("resiliencia_vertices", "node_resilience_random_final_lcc_fraction", "LCC final vértices aleatória", "Fração da maior componente após remoção aleatória de vértices."),
+    ("resiliencia_vertices", "node_resilience_random_lcc_fraction_drop", "Queda LCC vértices aleatória", "Queda da maior componente após remoção aleatória de vértices."),
+    ("resiliencia_vertices", "node_resilience_random_final_efficiency_topological_retained", "Eficiência vértices aleatória", "Eficiência topológica retida após remoção aleatória de vértices."),
+    ("resiliencia_vertices_aleatoria_agregada", "node_resilience_random_aggregate_runs", "Repeticoes aleatorias vértices", "Quantidade de execucoes aleatorias agregadas por vértices."),
+    ("resiliencia_vertices_aleatoria_agregada", "node_resilience_random_final_lcc_fraction_mean", "LCC media aleatoria vértices", "Media final da LCC nas repeticoes aleatorias por vértices."),
+    ("resiliencia_vertices_aleatoria_agregada", "node_resilience_random_final_lcc_fraction_std", "Desvio LCC aleatoria vértices", "Desvio-padrao final da LCC nas repeticoes aleatorias por vértices."),
+    ("resiliencia_vertices_aleatoria_agregada", "node_resilience_random_final_efficiency_topological_retained_mean", "Eficiencia media aleatoria vértices", "Media final da eficiencia topologica retida nas repeticoes aleatorias por vértices."),
     ("resiliencia_comunidades", "community_resilience_targeted_final_lcc_nodes_fraction", "LCC final comunidades dirigida", "Fracao ponderada por nos na maior componente do grafo de comunidades."),
     ("resiliencia_comunidades", "community_resilience_targeted_lcc_nodes_fraction_drop", "Queda LCC comunidades dirigida", "Queda da fracao ponderada por nos no grafo de comunidades."),
     ("resiliencia_comunidades", "community_resilience_targeted_final_efficiency_topological_retained", "Eficiencia comunidades dirigida", "Fracao da eficiencia topologica retida no grafo de comunidades."),
@@ -57,6 +87,77 @@ COMPARISON_METRICS = [
     ("resiliencia_interna_comunidades", "intra_community_resilience_targeted_final_lcc_mean", "LCC final interna media dirigida", "Media da fracao final da maior componente dentro de cada comunidade."),
     ("resiliencia_interna_comunidades", "intra_community_resilience_targeted_adaptive_auc_lcc_mean", "AUC media interna adaptativa", "Media da resiliencia interna das comunidades sob remocao adaptativa."),
     ("resiliencia_interna_comunidades", "intra_community_resilience_random_auc_lcc_mean", "AUC media interna aleatoria", "Baseline aleatorio medio da resiliencia interna das comunidades."),
+    ("vulnerabilidade", "vulnerability_top_node_score", "Maior vulnerabilidade de nó", "Maior score composto de vulnerabilidade entre nós."),
+    ("vulnerabilidade", "vulnerability_articulation_nodes", "Nós de articulação", "Quantidade de nós cuja remoção aumenta a fragmentação da rede."),
+    ("vulnerabilidade", "vulnerability_top_edge_score", "Maior vulnerabilidade de aresta", "Maior score composto de vulnerabilidade entre arestas."),
+    ("vulnerabilidade", "vulnerability_bridge_edges", "Pontes estruturais", "Quantidade de arestas cuja remoção aumenta a fragmentação da rede."),
+    ("gargalos_estruturais", "structural_articulation_nodes", "Nós de articulação estruturais", "Quantidade de nós cuja remoção fragmenta a rede."),
+    ("gargalos_estruturais", "structural_bridge_edges", "Pontes estruturais diretas", "Quantidade de arestas cuja remoção fragmenta a rede."),
+    ("gargalos_estruturais", "structural_top_articulation_detached_nodes", "Maior impacto por articulação", "Nós destacados pela remoção do principal nó de articulação."),
+    ("gargalos_estruturais", "structural_top_bridge_detached_nodes", "Maior impacto por ponte", "Nós destacados pela remoção da principal ponte estrutural."),
+    ("gargalos_estruturais", "structural_top_bottleneck_score", "Maior score de gargalo", "Score composto do principal gargalo estrutural."),
+    ("gargalos_estruturais", "structural_top_bottleneck_detached_nodes", "Maior impacto de gargalo", "Nós destacados pelo principal gargalo estrutural."),
+    ("redundancia_rotas", "route_redundancy_sampled_pairs", "Pares OD amostrados", "Quantidade de pares origem-destino usados no perfil de redundância."),
+    ("redundancia_rotas", "route_redundancy_alternative_rate", "Taxa com alternativa", "Fração dos pares com alguma rota alternativa após bloqueio da melhor rota."),
+    ("redundancia_rotas", "route_redundancy_reasonable_rate", "Taxa com alternativa razoável", "Fração dos pares com alternativa dentro do limiar configurado."),
+    ("redundancia_rotas", "route_redundancy_disconnected_rate", "Taxa sem rota após bloqueio", "Fração dos pares que ficam desconectados após bloqueio da melhor rota."),
+    ("redundancia_rotas", "route_redundancy_alternative_ratio_mean", "Razão média alternativa/melhor", "Distância média da alternativa em relação à melhor rota."),
+    ("redundancia_rotas", "route_redundancy_detour_distance_m_mean", "Desvio médio da alternativa", "Acréscimo médio de distância em metros quando há alternativa."),
+    ("multiescala_espacial", "spatial_populated_cells", "Células povoadas", "Quantidade de células espaciais com pelo menos um nó."),
+    ("multiescala_espacial", "spatial_mean_nodes_per_cell", "Nós médios por célula", "Média de nós por célula povoada."),
+    ("multiescala_espacial", "spatial_mean_degree_by_cell", "Grau médio local", "Média do grau médio local entre células."),
+    ("multiescala_espacial", "spatial_mean_vulnerability_by_cell", "Vulnerabilidade média local", "Média da vulnerabilidade média local entre células."),
+    ("multiescala_espacial", "spatial_mean_route_redundancy_reasonable_rate", "Redundância razoável local", "Média da taxa local de alternativas razoáveis nas células com pares OD."),
+    ("multiescala_espacial", "spatial_mean_route_redundancy_disconnected_rate", "Desconexão local", "Média da taxa local de desconexão após bloqueio nas células com pares OD."),
+    ("multiescala_espacial", "spatial_top_vulnerability_value", "Maior vulnerabilidade local", "Maior vulnerabilidade observada em uma célula espacial."),
+    ("robustez_espacial", "spatial_robustness_tested_cells", "Células testadas", "Quantidade de células com bloqueio espacial simulado."),
+    ("robustez_espacial", "spatial_robustness_mean_removed_edges", "Arestas removidas médias", "Média de arestas removidas por bloqueio regional."),
+    ("robustez_espacial", "spatial_robustness_mean_lcc_fraction_drop", "Queda LCC média espacial", "Queda média da maior componente após bloqueios regionais."),
+    ("robustez_espacial", "spatial_robustness_max_lcc_fraction_drop", "Maior queda LCC espacial", "Maior queda da maior componente causada por uma célula."),
+    ("robustez_espacial", "spatial_robustness_mean_efficiency_retained", "Eficiência média retida espacial", "Eficiência topológica média retida após bloqueios regionais."),
+    ("robustez_espacial", "spatial_robustness_min_efficiency_retained", "Menor eficiência retida espacial", "Menor eficiência topológica retida após um bloqueio regional."),
+    ("robustez_espacial", "spatial_robustness_max_components_increase", "Maior fragmentação espacial", "Maior aumento no número de componentes após um bloqueio regional."),
+    ("hierarquia_viaria", "road_hierarchy_arterial_edge_fraction", "Arestas arteriais", "Fração de arestas nas classes motorway, trunk, primary e secondary."),
+    ("hierarquia_viaria", "road_hierarchy_arterial_length_fraction", "Extensão arterial", "Fração da extensão viária nas classes arteriais."),
+    ("hierarquia_viaria", "road_hierarchy_local_edge_fraction", "Arestas locais", "Fração de arestas nas classes residencial, living_street e service."),
+    ("hierarquia_viaria", "road_hierarchy_top_lcc_dependency_drop", "Dependência LCC por classe", "Maior queda da maior componente causada pela remoção de uma classe highway."),
+    ("hierarquia_viaria", "road_hierarchy_top_efficiency_retained", "Eficiência retida por classe crítica", "Eficiência topológica retida após remoção da classe mais crítica por eficiência."),
+    ("hierarquia_viaria", "road_hierarchy_top_centrality_class", "Classe mais central", "Classe highway com maior edge betweenness observado no ranking de arestas críticas."),
+    ("morfologia_urbana", "urban_morphology_dominant_class", "Classe morfológica dominante", "Padrão morfológico mais frequente nas células espaciais."),
+    ("morfologia_urbana", "urban_morphology_insufficient_fraction", "Fração insuficiente", "Fração de células povoadas com poucos elementos para classificação morfológica."),
+    ("morfologia_urbana", "urban_morphology_grid_fraction", "Fração gradeada", "Fração das células classificadas como gradeadas."),
+    ("morfologia_urbana", "urban_morphology_radial_linear_fraction", "Fração radial/linear", "Fração das células classificadas como radiais ou lineares."),
+    ("morfologia_urbana", "urban_morphology_organic_fraction", "Fração orgânica", "Fração das células classificadas como orgânicas."),
+    ("morfologia_urbana", "urban_morphology_fragmented_fraction", "Fração fragmentada", "Fração das células classificadas como fragmentadas."),
+    ("morfologia_urbana", "urban_morphology_mean_orientation_entropy", "Entropia angular média", "Diversidade média das orientações viárias locais."),
+    ("morfologia_urbana", "urban_morphology_mean_orthogonal_share", "Ortogonalidade média", "Participação média dos dois eixos ortogonais dominantes."),
+    ("morfologia_urbana", "urban_morphology_mean_segment_length_m", "Segmento médio", "Comprimento médio dos segmentos viários nas células classificadas."),
+    ("eficiencia_od", "od_efficiency_sampled_pairs", "Pares OD eficiência", "Quantidade de pares origem-destino amostrados para eficiência estatística."),
+    ("eficiencia_od", "od_efficiency_route_distance_m_mean", "Distância média OD", "Distância média das rotas mínimas entre pares OD."),
+    ("eficiencia_od", "od_efficiency_route_distance_m_p90", "Distância OD P90", "Percentil 90 da distância das rotas mínimas."),
+    ("eficiencia_od", "od_efficiency_hops_mean", "Hops médios OD", "Quantidade média de segmentos por rota OD."),
+    ("eficiencia_od", "od_efficiency_circuity_ratio_mean", "Circuity média OD", "Distância da rota dividida pela distância direta geográfica."),
+    ("eficiencia_od", "od_efficiency_circuity_ratio_p90", "Circuity P90 OD", "Percentil 90 do desvio das rotas."),
+    ("eficiencia_od", "od_efficiency_route_efficiency_mean", "Eficiência média OD", "Distância direta dividida pela distância da rota."),
+    ("eficiencia_od", "od_efficiency_accessibility_within_5km_rate", "Acessibilidade até 5 km", "Fração dos pares OD com rota até 5 km."),
+    ("eficiencia_od", "od_efficiency_accessibility_within_10km_rate", "Acessibilidade até 10 km", "Fração dos pares OD com rota até 10 km."),
+    ("eficiencia_od", "od_efficiency_high_detour_rate", "Taxa de alto desvio OD", "Fração dos pares com circuity acima de 1,75."),
+    ("subcentros", "subcenters_count", "Subcentros", "Quantidade de subcentros topológicos detectados."),
+    ("subcentros", "subcenters_fraction", "Fração de subcentros", "Fração de células povoadas classificadas como subcentros."),
+    ("subcentros", "subcenters_polycentricity_index", "Índice de policentralidade", "Distribuição da importância estrutural entre subcentros."),
+    ("subcentros", "subcenters_monocentricity_index", "Índice de monocentralidade", "Participação do principal subcentro no score total."),
+    ("subcentros", "subcenters_score_entropy", "Entropia dos subcentros", "Entropia normalizada dos scores dos subcentros."),
+    ("subcentros", "subcenters_top_score", "Maior score de subcentro", "Score do principal subcentro topológico."),
+    ("barreiras_urbanas", "urban_barriers_spatial_permeability_index", "Permeabilidade espacial", "Permeabilidade média entre células espaciais vizinhas."),
+    ("barreiras_urbanas", "urban_barriers_exposure_index", "Exposição a barreiras", "Índice composto de exposição da rede a barreiras topológicas."),
+    ("barreiras_urbanas", "urban_barriers_low_permeability_cells", "Células pouco permeáveis", "Quantidade de células com permeabilidade inferior a 0,50."),
+    ("barreiras_urbanas", "urban_barriers_missing_adjacent_connections", "Conexões vizinhas ausentes", "Pares de células vizinhas sem conexão viária direta."),
+    ("barreiras_urbanas", "urban_barriers_critical_structural_connections", "Travessias críticas", "Conexões entre regiões que passam por pontes estruturais."),
+    ("barreiras_urbanas", "urban_barriers_top_barrier_score", "Maior score de barreira", "Maior score de barreira provável observado entre regiões."),
+    ("perfil_escala", "network_scale_multiscale_robustness_index", "Robustez multiescalar", "Estabilidade média das principais métricas locais entre escalas."),
+    ("perfil_escala", "network_scale_least_stable_score", "Menor estabilidade por escala", "Score de estabilidade da métrica mais sensível à escala."),
+    ("perfil_escala", "network_scale_least_stable_cv", "Maior CV por escala", "Coeficiente de variação da métrica mais sensível à escala."),
+    ("perfil_escala", "network_scale_most_stable_score", "Maior estabilidade por escala", "Score de estabilidade da métrica mais estável entre escalas."),
 ]
 
 
@@ -136,6 +237,43 @@ def _comparison_table(datasets: list[str], summaries: dict[str, dict[str, dict[s
       </div>
     </section>
     """
+
+
+def _write_comparison_csv(
+    datasets: list[str],
+    summaries: dict[str, dict[str, dict[str, str]]],
+    output_path: str,
+) -> str:
+    csv_path = str(Path(output_path).with_suffix(".csv"))
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=[
+                "dataset",
+                "grupo",
+                "indicador",
+                "rotulo",
+                "valor",
+                "unidade",
+                "descricao",
+            ],
+        )
+        writer.writeheader()
+        for group, metric, label, description in COMPARISON_METRICS:
+            for dataset in datasets:
+                summary = summaries[dataset]
+                writer.writerow(
+                    {
+                        "dataset": dataset,
+                        "grupo": group,
+                        "indicador": metric,
+                        "rotulo": label,
+                        "valor": _value(summary, metric),
+                        "unidade": _unit(summary, metric),
+                        "descricao": description,
+                    }
+                )
+    return csv_path
 
 
 def _dataset_cards(datasets: list[str], summaries: dict[str, dict[str, dict[str, str]]]) -> str:
@@ -222,6 +360,16 @@ def _artifact_path(dataset: str, kind: str) -> Path:
         return Path(f"outputs/{dataset}/figures/resilience_curve_targeted_adaptive.png")
     if kind == "resilience_random":
         return Path(f"outputs/{dataset}/figures/resilience_curve_random.png")
+    if kind == "resilience_random_aggregate":
+        return Path(f"outputs/{dataset}/figures/resilience_random_aggregate.png")
+    if kind == "node_resilience_targeted":
+        return Path(f"outputs/{dataset}/figures/node_resilience_curve_targeted.png")
+    if kind == "node_resilience_targeted_adaptive":
+        return Path(f"outputs/{dataset}/figures/node_resilience_curve_targeted_adaptive.png")
+    if kind == "node_resilience_random":
+        return Path(f"outputs/{dataset}/figures/node_resilience_curve_random.png")
+    if kind == "node_resilience_random_aggregate":
+        return Path(f"outputs/{dataset}/figures/node_resilience_random_aggregate.png")
     if kind == "community_resilience_targeted":
         return Path(f"outputs/{dataset}/figures/community_resilience_curve_targeted.png")
     if kind == "community_resilience_targeted_adaptive":
@@ -238,6 +386,54 @@ def _artifact_path(dataset: str, kind: str) -> Path:
         return Path(f"outputs/{dataset}/maps/rota_distancia.html")
     if kind == "critical_map":
         return Path(f"outputs/{dataset}/maps/pontos_criticos.html")
+    if kind == "critical_edges_map":
+        return Path(f"outputs/{dataset}/maps/arestas_criticas.html")
+    if kind == "vulnerability_nodes_map":
+        return Path(f"outputs/{dataset}/maps/vulnerability_nodes.html")
+    if kind == "vulnerability_edges_map":
+        return Path(f"outputs/{dataset}/maps/vulnerability_edges.html")
+    if kind == "structural_articulations_map":
+        return Path(f"outputs/{dataset}/maps/structural_articulations.html")
+    if kind == "structural_bridges_map":
+        return Path(f"outputs/{dataset}/maps/structural_bridges.html")
+    if kind == "structural_bottlenecks_map":
+        return Path(f"outputs/{dataset}/maps/structural_bottlenecks.html")
+    if kind == "route_redundancy_map":
+        return Path(f"outputs/{dataset}/maps/route_redundancy.html")
+    if kind == "spatial_multiscale_vulnerability_map":
+        return Path(f"outputs/{dataset}/maps/spatial_multiscale_vulnerability.html")
+    if kind == "spatial_multiscale_connectivity_map":
+        return Path(f"outputs/{dataset}/maps/spatial_multiscale_connectivity.html")
+    if kind == "spatial_multiscale_redundancy_map":
+        return Path(f"outputs/{dataset}/maps/spatial_multiscale_redundancy.html")
+    if kind == "spatial_robustness_lcc_map":
+        return Path(f"outputs/{dataset}/maps/spatial_robustness_lcc_drop.html")
+    if kind == "spatial_robustness_efficiency_map":
+        return Path(f"outputs/{dataset}/maps/spatial_robustness_efficiency_drop.html")
+    if kind == "spatial_robustness_fragmentation_map":
+        return Path(f"outputs/{dataset}/maps/spatial_robustness_fragmentation.html")
+    if kind == "road_hierarchy_map":
+        return Path(f"outputs/{dataset}/maps/road_hierarchy_impact.html")
+    if kind == "urban_morphology_class_map":
+        return Path(f"outputs/{dataset}/maps/urban_morphology_classes.html")
+    if kind == "urban_morphology_entropy_map":
+        return Path(f"outputs/{dataset}/maps/urban_morphology_orientation_entropy.html")
+    if kind == "urban_morphology_connectivity_map":
+        return Path(f"outputs/{dataset}/maps/urban_morphology_connectivity.html")
+    if kind == "od_efficiency_map":
+        return Path(f"outputs/{dataset}/maps/od_efficiency_routes.html")
+    if kind == "subcenters_map":
+        return Path(f"outputs/{dataset}/maps/subcenters.html")
+    if kind == "urban_barriers_permeability_map":
+        return Path(f"outputs/{dataset}/maps/urban_barriers_permeability.html")
+    if kind == "urban_barriers_connections_map":
+        return Path(f"outputs/{dataset}/maps/urban_barriers_connections.html")
+    if kind == "network_scale_metrics":
+        return Path(f"outputs/{dataset}/figures/network_scale_profile_metrics.png")
+    if kind == "network_scale_stability":
+        return Path(f"outputs/{dataset}/figures/network_scale_profile_stability.png")
+    if kind == "network_scale_map":
+        return Path(f"outputs/{dataset}/maps/network_scale_profile_low_permeability.html")
     if kind == "communities_map":
         return Path(f"outputs/{dataset}/maps/comunidades.html")
     raise ValueError(f"Tipo de artefato desconhecido: {kind}")
@@ -298,6 +494,11 @@ def _side_by_side_dashboard(datasets: list[str], output_path: str) -> str:
         _visual_compare_block("Resiliencia - Remocao Dirigida", datasets, "resilience_targeted", "image", output_path),
         _visual_compare_block("Resiliencia - Remocao Dirigida Adaptativa", datasets, "resilience_targeted_adaptive", "image", output_path),
         _visual_compare_block("Resiliencia - Remocao Aleatoria", datasets, "resilience_random", "image", output_path),
+        _visual_compare_block("Resiliencia - Remocao Aleatoria Agregada", datasets, "resilience_random_aggregate", "image", output_path),
+        _visual_compare_block("Resiliencia por Vertices - Dirigida", datasets, "node_resilience_targeted", "image", output_path),
+        _visual_compare_block("Resiliencia por Vertices - Dirigida Adaptativa", datasets, "node_resilience_targeted_adaptive", "image", output_path),
+        _visual_compare_block("Resiliencia por Vertices - Aleatoria", datasets, "node_resilience_random", "image", output_path),
+        _visual_compare_block("Resiliencia por Vertices - Aleatoria Agregada", datasets, "node_resilience_random_aggregate", "image", output_path),
         _visual_compare_block("Resiliencia por Comunidades - Dirigida", datasets, "community_resilience_targeted", "image", output_path),
         _visual_compare_block("Resiliencia por Comunidades - Dirigida Adaptativa", datasets, "community_resilience_targeted_adaptive", "image", output_path),
         _visual_compare_block("Resiliencia por Comunidades - Aleatoria", datasets, "community_resilience_random", "image", output_path),
@@ -306,6 +507,30 @@ def _side_by_side_dashboard(datasets: list[str], output_path: str) -> str:
         _visual_compare_block("Resiliencia Interna por Comunidade - Aleatoria", datasets, "intra_community_resilience_random", "image", output_path),
         _visual_compare_block("Mapa de Rota", datasets, "route_map", "iframe", output_path),
         _visual_compare_block("Mapa de Pontos Criticos", datasets, "critical_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Arestas Criticas", datasets, "critical_edges_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Vulnerabilidade - Nos", datasets, "vulnerability_nodes_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Vulnerabilidade - Arestas", datasets, "vulnerability_edges_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Gargalos - Articulacoes", datasets, "structural_articulations_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Gargalos - Pontes", datasets, "structural_bridges_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Gargalos - Ranking Combinado", datasets, "structural_bottlenecks_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Redundancia de Rotas", datasets, "route_redundancy_map", "iframe", output_path),
+        _visual_compare_block("Mapa Multiescala - Vulnerabilidade", datasets, "spatial_multiscale_vulnerability_map", "iframe", output_path),
+        _visual_compare_block("Mapa Multiescala - Conectividade", datasets, "spatial_multiscale_connectivity_map", "iframe", output_path),
+        _visual_compare_block("Mapa Multiescala - Baixa Redundancia", datasets, "spatial_multiscale_redundancy_map", "iframe", output_path),
+        _visual_compare_block("Mapa Robustez Espacial - Queda LCC", datasets, "spatial_robustness_lcc_map", "iframe", output_path),
+        _visual_compare_block("Mapa Robustez Espacial - Queda Eficiencia", datasets, "spatial_robustness_efficiency_map", "iframe", output_path),
+        _visual_compare_block("Mapa Robustez Espacial - Fragmentacao", datasets, "spatial_robustness_fragmentation_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Hierarquia Viaria", datasets, "road_hierarchy_map", "iframe", output_path),
+        _visual_compare_block("Mapa Morfologico - Classes Urbanas", datasets, "urban_morphology_class_map", "iframe", output_path),
+        _visual_compare_block("Mapa Morfologico - Entropia Angular", datasets, "urban_morphology_entropy_map", "iframe", output_path),
+        _visual_compare_block("Mapa Morfologico - Conectividade", datasets, "urban_morphology_connectivity_map", "iframe", output_path),
+        _visual_compare_block("Mapa Eficiencia OD - Rotas com Maior Desvio", datasets, "od_efficiency_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Subcentros e Policentralidade", datasets, "subcenters_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Barreiras Urbanas - Permeabilidade", datasets, "urban_barriers_permeability_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Barreiras Urbanas - Conexoes", datasets, "urban_barriers_connections_map", "iframe", output_path),
+        _visual_compare_block("Perfil de Escala - Metricas", datasets, "network_scale_metrics", "image", output_path),
+        _visual_compare_block("Perfil de Escala - Estabilidade", datasets, "network_scale_stability", "image", output_path),
+        _visual_compare_block("Mapa Perfil de Escala - Baixa Permeabilidade", datasets, "network_scale_map", "iframe", output_path),
         _visual_compare_block("Mapa de Comunidades", datasets, "communities_map", "iframe", output_path),
     ]
     return "".join(blocks)
@@ -316,12 +541,14 @@ def gerar_comparacao_html(datasets: list[str], output_path: str | None = None) -
         raise ValueError("Passe pelo menos dois datasets para comparar.")
 
     datasets = [_safe_name(dataset) for dataset in datasets]
+    audit = auditar_comparabilidade(datasets)
     summaries = {dataset: _summary_for_dataset(dataset) for dataset in datasets}
 
     compare_dir = Path("outputs/comparisons")
     compare_dir.mkdir(parents=True, exist_ok=True)
     if output_path is None:
         output_path = str(compare_dir / f"compare_{'_vs_'.join(datasets)}.html")
+    comparison_csv = _write_comparison_csv(datasets, summaries, output_path)
 
     css = """
     :root {
@@ -491,6 +718,12 @@ def gerar_comparacao_html(datasets: list[str], output_path: str | None = None) -
     }
     """
 
+    audit_notice = (
+        "<section class=\"panel wide\"><h2>Status de Comparabilidade</h2>"
+        f"<p><strong>{_e(audit['status'].upper())}</strong>: "
+        "recortes, datas e cobertura experimental foram auditados. "
+        "Quando o status for exploratorio, os valores podem ser observados, mas não sustentam inferências fortes.</p></section>"
+    )
     html_doc = f"""<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -507,6 +740,7 @@ def gerar_comparacao_html(datasets: list[str], output_path: str | None = None) -
   <main>
     {_dataset_cards(datasets, summaries)}
     {_side_by_side_dashboard(datasets, output_path)}
+    {audit_notice}
     {_comparison_table(datasets, summaries)}
     {_link_grid(datasets)}
   </main>
@@ -517,5 +751,6 @@ def gerar_comparacao_html(datasets: list[str], output_path: str | None = None) -
     Path(output_path).write_text(html_doc, encoding="utf-8")
     return {
         "compare_html": output_path,
+        "compare_csv": comparison_csv,
         "datasets": datasets,
     }

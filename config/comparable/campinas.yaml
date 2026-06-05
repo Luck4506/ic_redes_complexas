@@ -1,0 +1,8 @@
+city_id: campinas_admin
+network_type: drive
+simplify: true
+clip_mode: place
+place_query: "Campinas, São Paulo, Brazil"
+overpass:
+  use_cache: true
+  cache_folder: data/cache

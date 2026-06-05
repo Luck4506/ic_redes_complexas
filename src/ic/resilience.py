@@ -65,6 +65,7 @@ def testar_resiliencia(
     k_edge: int = 80,
     efficiency_samples: int = 20,
     seed: int = 42,
+    output_suffix: str | None = None,
 ) -> dict:
     """
     E7: Remove arestas e mede fragmentação.
@@ -187,9 +188,10 @@ def testar_resiliencia(
     Path(pasta_fig).mkdir(parents=True, exist_ok=True)
     Path(pasta_logs).mkdir(parents=True, exist_ok=True)
 
-    curve_csv = f"{pasta_metrics}/resilience_curve_{strategy}.csv"
-    curve_plot = f"{pasta_fig}/resilience_curve_{strategy}.png"
-    report_txt = f"{pasta_logs}/resilience_report_{strategy}.txt"
+    suffix = output_suffix or strategy
+    curve_csv = f"{pasta_metrics}/resilience_curve_{suffix}.csv"
+    curve_plot = f"{pasta_fig}/resilience_curve_{suffix}.png"
+    report_txt = f"{pasta_logs}/resilience_report_{suffix}.txt"
 
     with open(curve_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)

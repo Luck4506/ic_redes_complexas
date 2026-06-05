@@ -198,9 +198,17 @@ def gerar_dashboard_html(city_id: str) -> dict:
     communities_rows = _read_csv_dicts(f"{metrics_dir}/community_summary.csv")
     top_nodes_rows = _read_csv_dicts(f"{metrics_dir}/top_nodes.csv")
     top_edges_rows = _read_csv_dicts(f"{metrics_dir}/top_edges.csv")
+    centrality_rankings_rows = _read_csv_dicts(f"{metrics_dir}/centrality_rankings.csv")
+    functional_groups_rows = _read_csv_dicts(f"{metrics_dir}/functional_topology_groups.csv")
+    functional_correlations_rows = _read_csv_dicts(f"{metrics_dir}/functional_topology_correlations.csv")
+    approximation_validation_rows = _read_csv_dicts(f"{metrics_dir}/approximation_validation.csv")
     res_target_rows = _read_csv_dicts(f"{metrics_dir}/resilience_curve_targeted.csv")
     res_target_adaptive_rows = _read_csv_dicts(f"{metrics_dir}/resilience_curve_targeted_adaptive.csv")
     res_random_rows = _read_csv_dicts(f"{metrics_dir}/resilience_curve_random.csv")
+    node_res_target_rows = _read_csv_dicts(f"{metrics_dir}/node_resilience_curve_targeted.csv")
+    node_res_target_adaptive_rows = _read_csv_dicts(f"{metrics_dir}/node_resilience_curve_targeted_adaptive.csv")
+    node_res_random_rows = _read_csv_dicts(f"{metrics_dir}/node_resilience_curve_random.csv")
+    node_res_removed_target_rows = _read_csv_dicts(f"{metrics_dir}/node_resilience_removed_targeted.csv")
     comm_res_summary_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_summary.csv")
     comm_res_top_edges_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_top_edges.csv")
     comm_res_target_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_targeted.csv")
@@ -211,6 +219,33 @@ def gerar_dashboard_html(city_id: str) -> dict:
         f"{metrics_dir}/intra_community_resilience_summary_targeted_adaptive.csv"
     )
     intra_comm_random_rows = _read_csv_dicts(f"{metrics_dir}/intra_community_resilience_summary_random.csv")
+    vulnerability_nodes_rows = _read_csv_dicts(f"{metrics_dir}/vulnerability_nodes.csv")
+    vulnerability_edges_rows = _read_csv_dicts(f"{metrics_dir}/vulnerability_edges.csv")
+    structural_articulations_rows = _read_csv_dicts(f"{metrics_dir}/structural_articulations.csv")
+    structural_bridges_rows = _read_csv_dicts(f"{metrics_dir}/structural_bridges.csv")
+    structural_bottlenecks_rows = _read_csv_dicts(f"{metrics_dir}/structural_bottlenecks.csv")
+    route_redundancy_pairs_rows = _read_csv_dicts(f"{metrics_dir}/route_redundancy_pairs.csv")
+    route_redundancy_summary_rows = _read_csv_dicts(f"{metrics_dir}/route_redundancy_summary.csv")
+    spatial_multiscale_cells_rows = _read_csv_dicts(f"{metrics_dir}/spatial_multiscale_cells.csv")
+    spatial_multiscale_summary_rows = _read_csv_dicts(f"{metrics_dir}/spatial_multiscale_summary.csv")
+    spatial_robustness_cells_rows = _read_csv_dicts(f"{metrics_dir}/spatial_robustness_cells.csv")
+    spatial_robustness_summary_rows = _read_csv_dicts(f"{metrics_dir}/spatial_robustness_summary.csv")
+    road_hierarchy_rows = _read_csv_dicts(f"{metrics_dir}/road_hierarchy_by_class.csv")
+    road_hierarchy_summary_rows = _read_csv_dicts(f"{metrics_dir}/road_hierarchy_summary.csv")
+    urban_morphology_cells_rows = _read_csv_dicts(f"{metrics_dir}/urban_morphology_cells.csv")
+    urban_morphology_summary_rows = _read_csv_dicts(f"{metrics_dir}/urban_morphology_summary.csv")
+    od_efficiency_pairs_rows = _read_csv_dicts(f"{metrics_dir}/od_efficiency_pairs.csv")
+    od_efficiency_summary_rows = _read_csv_dicts(f"{metrics_dir}/od_efficiency_summary.csv")
+    subcenters_rows = _read_csv_dicts(f"{metrics_dir}/subcenters.csv")
+    subcenters_summary_rows = _read_csv_dicts(f"{metrics_dir}/subcenters_summary.csv")
+    subcenters_cells_rows = _read_csv_dicts(f"{metrics_dir}/subcenters_cells.csv")
+    urban_barriers_cells_rows = _read_csv_dicts(f"{metrics_dir}/urban_barriers_cells.csv")
+    urban_barriers_connections_rows = _read_csv_dicts(f"{metrics_dir}/urban_barriers_connections.csv")
+    urban_barriers_summary_rows = _read_csv_dicts(f"{metrics_dir}/urban_barriers_summary.csv")
+    network_scale_summary_rows = _read_csv_dicts(f"{metrics_dir}/network_scale_profile_summary.csv")
+    network_scale_scales_rows = _read_csv_dicts(f"{metrics_dir}/network_scale_profile_scales.csv")
+    network_scale_stability_rows = _read_csv_dicts(f"{metrics_dir}/network_scale_profile_stability.csv")
+    network_scale_cells_rows = _read_csv_dicts(f"{metrics_dir}/network_scale_profile_cells.csv")
 
     cards = [
         _card("Nos", _metric(summary, "nodes"), "Intersecoes/pontos do grafo"),
@@ -247,7 +282,18 @@ def gerar_dashboard_html(city_id: str) -> dict:
         </section>
         """
 
+    reading_guide = """
+    <section class="panel wide">
+      <h2>Guia de Leitura</h2>
+      <p><strong>Topologia:</strong> descreve a estrutura das conexoes. <strong>Funcao:</strong> usa atributos OSM das vias e apresenta associacoes descritivas, nao causalidade.</p>
+      <p><strong>Aproximacoes:</strong> closeness, betweenness, caminhos, diametro e eficiencia podem usar amostragem. Consulte a tabela de validacao antes de interpretar diferencas pequenas.</p>
+      <p><strong>Resiliencia:</strong> remocao de arestas e remocao de vertices sao experimentos separados. Na remocao de vertices, os nos retirados contam como desconectados e as fontes amostradas permanecem fixas durante a curva.</p>
+      <p><strong>Comparacoes:</strong> cidades com recortes, datas ou cobertura experimental diferentes devem ser tratadas como comparacoes exploratorias.</p>
+    </section>
+    """
+
     sections = [
+        reading_guide,
         meta_block,
         _metric_list("Resumo Consolidado", summary_rows, limit=80),
         _table("Superficie da Rede", surface_rows),
@@ -258,9 +304,17 @@ def gerar_dashboard_html(city_id: str) -> dict:
         _table("Comunidades", communities_rows),
         _table("Top Nos Criticos", top_nodes_rows),
         _table("Top Arestas Criticas", top_edges_rows),
+        _table("Rankings de Centralidade", centrality_rankings_rows),
+        _table("Topologia x Caracteristicas Funcionais - Grupos", functional_groups_rows),
+        _table("Topologia x Caracteristicas Funcionais - Correlacoes", functional_correlations_rows),
+        _table("Validacao das Aproximacoes", approximation_validation_rows),
         _table("Resiliencia - Remocao Dirigida", res_target_rows),
         _table("Resiliencia - Remocao Dirigida Adaptativa", res_target_adaptive_rows),
         _table("Resiliencia - Remocao Aleatoria", res_random_rows),
+        _table("Resiliencia por Vertices - Dirigida", node_res_target_rows),
+        _table("Resiliencia por Vertices - Dirigida Adaptativa", node_res_target_adaptive_rows),
+        _table("Resiliencia por Vertices - Aleatoria", node_res_random_rows),
+        _table("Vertices Criticos Removidos - Dirigida", node_res_removed_target_rows),
         _table("Resiliencia por Comunidades - Resumo", comm_res_summary_rows),
         _table("Resiliencia por Comunidades - Conexoes Criticas", comm_res_top_edges_rows),
         _table("Resiliencia por Comunidades - Dirigida", comm_res_target_rows),
@@ -269,10 +323,44 @@ def gerar_dashboard_html(city_id: str) -> dict:
         _table("Resiliencia Interna por Comunidade - Dirigida", intra_comm_target_rows),
         _table("Resiliencia Interna por Comunidade - Dirigida Adaptativa", intra_comm_target_adaptive_rows),
         _table("Resiliencia Interna por Comunidade - Aleatoria", intra_comm_random_rows),
+        _table("Indice de Vulnerabilidade - Nos", vulnerability_nodes_rows),
+        _table("Indice de Vulnerabilidade - Arestas", vulnerability_edges_rows),
+        _table("Gargalos Estruturais - Articulacoes", structural_articulations_rows),
+        _table("Gargalos Estruturais - Pontes", structural_bridges_rows),
+        _table("Gargalos Estruturais - Ranking Combinado", structural_bottlenecks_rows),
+        _table("Redundancia de Rotas - Resumo", route_redundancy_summary_rows),
+        _table("Redundancia de Rotas - Pares OD", route_redundancy_pairs_rows),
+        _table("Multiescala Espacial - Resumo", spatial_multiscale_summary_rows),
+        _table("Multiescala Espacial - Celulas", spatial_multiscale_cells_rows),
+        _table("Robustez Espacial - Resumo", spatial_robustness_summary_rows),
+        _table("Robustez Espacial - Bloqueios por Celula", spatial_robustness_cells_rows),
+        _table("Hierarquia Viaria - Resumo", road_hierarchy_summary_rows),
+        _table("Hierarquia Viaria - Classes Highway", road_hierarchy_rows),
+        _table("Planejamento Urbano x Rede - Resumo Morfologico", urban_morphology_summary_rows),
+        _table("Planejamento Urbano x Rede - Celulas", urban_morphology_cells_rows),
+        _table("Eficiencia OD - Resumo Estatistico", od_efficiency_summary_rows),
+        _table("Eficiencia OD - Pares com Maior Desvio", od_efficiency_pairs_rows),
+        _table("Subcentros e Policentralidade - Resumo", subcenters_summary_rows),
+        _table("Subcentros Detectados", subcenters_rows),
+        _table("Ranking de Centralidade por Regiao", subcenters_cells_rows),
+        _table("Barreiras Urbanas - Resumo", urban_barriers_summary_rows),
+        _table("Barreiras Urbanas - Celulas com Baixa Permeabilidade", urban_barriers_cells_rows),
+        _table("Barreiras Urbanas - Conexoes entre Regioes", urban_barriers_connections_rows),
+        _table("Perfil de Escala - Resumo", network_scale_summary_rows),
+        _table("Perfil de Escala - Metricas por Escala", network_scale_scales_rows),
+        _table("Perfil de Escala - Estabilidade das Metricas", network_scale_stability_rows),
+        _table("Perfil de Escala - Celulas", network_scale_cells_rows),
         _image_panel("Distribuicao de Graus", f"{figures_dir}/degree_distribution_loglog.png", outputs_root),
+        _image_panel("Perfil de Escala - Metricas", f"{figures_dir}/network_scale_profile_metrics.png", outputs_root),
+        _image_panel("Perfil de Escala - Estabilidade", f"{figures_dir}/network_scale_profile_stability.png", outputs_root),
         _image_panel("Resiliencia - Dirigida", f"{figures_dir}/resilience_curve_targeted.png", outputs_root),
         _image_panel("Resiliencia - Dirigida Adaptativa", f"{figures_dir}/resilience_curve_targeted_adaptive.png", outputs_root),
         _image_panel("Resiliencia - Aleatoria", f"{figures_dir}/resilience_curve_random.png", outputs_root),
+        _image_panel("Resiliencia - Aleatoria Agregada", f"{figures_dir}/resilience_random_aggregate.png", outputs_root),
+        _image_panel("Resiliencia por Vertices - Dirigida", f"{figures_dir}/node_resilience_curve_targeted.png", outputs_root),
+        _image_panel("Resiliencia por Vertices - Dirigida Adaptativa", f"{figures_dir}/node_resilience_curve_targeted_adaptive.png", outputs_root),
+        _image_panel("Resiliencia por Vertices - Aleatoria", f"{figures_dir}/node_resilience_curve_random.png", outputs_root),
+        _image_panel("Resiliencia por Vertices - Aleatoria Agregada", f"{figures_dir}/node_resilience_random_aggregate.png", outputs_root),
         _image_panel("Resiliencia por Comunidades - Dirigida", f"{figures_dir}/community_resilience_curve_targeted.png", outputs_root),
         _image_panel("Resiliencia por Comunidades - Dirigida Adaptativa", f"{figures_dir}/community_resilience_curve_targeted_adaptive.png", outputs_root),
         _image_panel("Resiliencia por Comunidades - Aleatoria", f"{figures_dir}/community_resilience_curve_random.png", outputs_root),
@@ -284,6 +372,28 @@ def gerar_dashboard_html(city_id: str) -> dict:
         _image_panel("Grafo - Comunidades", f"{figures_dir}/grafo_{city_id}_clean_comunidades.png", outputs_root),
         _iframe_panel("Mapa de Rota", f"{maps_dir}/rota_distancia.html", outputs_root),
         _iframe_panel("Mapa de Pontos Criticos", f"{maps_dir}/pontos_criticos.html", outputs_root),
+        _iframe_panel("Mapa de Arestas Criticas", f"{maps_dir}/arestas_criticas.html", outputs_root),
+        _iframe_panel("Mapa de Vulnerabilidade - Nos", f"{maps_dir}/vulnerability_nodes.html", outputs_root),
+        _iframe_panel("Mapa de Vulnerabilidade - Arestas", f"{maps_dir}/vulnerability_edges.html", outputs_root),
+        _iframe_panel("Mapa de Gargalos - Articulacoes", f"{maps_dir}/structural_articulations.html", outputs_root),
+        _iframe_panel("Mapa de Gargalos - Pontes", f"{maps_dir}/structural_bridges.html", outputs_root),
+        _iframe_panel("Mapa de Gargalos - Ranking Combinado", f"{maps_dir}/structural_bottlenecks.html", outputs_root),
+        _iframe_panel("Mapa de Redundancia de Rotas", f"{maps_dir}/route_redundancy.html", outputs_root),
+        _iframe_panel("Mapa Multiescala - Vulnerabilidade", f"{maps_dir}/spatial_multiscale_vulnerability.html", outputs_root),
+        _iframe_panel("Mapa Multiescala - Conectividade", f"{maps_dir}/spatial_multiscale_connectivity.html", outputs_root),
+        _iframe_panel("Mapa Multiescala - Baixa Redundancia", f"{maps_dir}/spatial_multiscale_redundancy.html", outputs_root),
+        _iframe_panel("Mapa Robustez Espacial - Queda LCC", f"{maps_dir}/spatial_robustness_lcc_drop.html", outputs_root),
+        _iframe_panel("Mapa Robustez Espacial - Queda Eficiencia", f"{maps_dir}/spatial_robustness_efficiency_drop.html", outputs_root),
+        _iframe_panel("Mapa Robustez Espacial - Fragmentacao", f"{maps_dir}/spatial_robustness_fragmentation.html", outputs_root),
+        _iframe_panel("Mapa de Hierarquia Viaria", f"{maps_dir}/road_hierarchy_impact.html", outputs_root),
+        _iframe_panel("Mapa Morfologico - Classes Urbanas", f"{maps_dir}/urban_morphology_classes.html", outputs_root),
+        _iframe_panel("Mapa Morfologico - Entropia Angular", f"{maps_dir}/urban_morphology_orientation_entropy.html", outputs_root),
+        _iframe_panel("Mapa Morfologico - Conectividade", f"{maps_dir}/urban_morphology_connectivity.html", outputs_root),
+        _iframe_panel("Mapa Eficiencia OD - Rotas com Maior Desvio", f"{maps_dir}/od_efficiency_routes.html", outputs_root),
+        _iframe_panel("Mapa de Subcentros e Policentralidade", f"{maps_dir}/subcenters.html", outputs_root),
+        _iframe_panel("Mapa de Barreiras Urbanas - Permeabilidade", f"{maps_dir}/urban_barriers_permeability.html", outputs_root),
+        _iframe_panel("Mapa de Barreiras Urbanas - Conexoes", f"{maps_dir}/urban_barriers_connections.html", outputs_root),
+        _iframe_panel("Mapa Perfil de Escala - Baixa Permeabilidade", f"{maps_dir}/network_scale_profile_low_permeability.html", outputs_root),
         _iframe_panel("Mapa de Comunidades", f"{maps_dir}/comunidades.html", outputs_root),
     ]
 
