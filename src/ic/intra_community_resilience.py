@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 
 from .community_resilience import _node_community, _read_node_communities
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import approximate_global_efficiency, simple_undirected_min_length_graph
 from .resilience import _largest_cc_stats
 
@@ -149,7 +149,7 @@ def testar_resiliencia_interna_comunidades(
     efficiency_samples: int = 20,
     seed: int = 42,
 ) -> dict:
-    """Mede a resiliência do subgrafo induzido de cada comunidade."""
+    """Mede a robustez estrutural do subgrafo induzido de cada comunidade."""
     ensure_city_dirs(city_id)
     if strategy not in {"random", "targeted", "targeted_adaptive"}:
         raise ValueError("strategy deve ser 'random', 'targeted' ou 'targeted_adaptive'.")
@@ -158,7 +158,7 @@ def testar_resiliencia_interna_comunidades(
     if min_size < 2:
         raise ValueError("min_size deve ser pelo menos 2.")
 
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     communities_path = f"outputs/{city_id}/metrics/nodes_communities.csv"
     print(f"[E7I] Carregando grafo: {graph_path}", flush=True)
     G = simple_undirected_min_length_graph(load_graphml(graph_path))
@@ -236,14 +236,14 @@ def testar_resiliencia_interna_comunidades(
     for row in summaries[: min(10, len(summaries))]:
         plt.annotate(str(row["community_id"]), (row["nodes"], row["resilience_auc_lcc"]), fontsize=8)
     plt.xlabel("Número de nós da comunidade")
-    plt.ylabel("Resiliência interna (AUC normalizada da LCC)")
-    plt.title(f"Resiliência interna das comunidades ({city_id}) — {strategy}")
+    plt.ylabel("Robustez interna (AUC normalizada da LCC)")
+    plt.title(f"Robustez estrutural interna das comunidades ({city_id}) — {strategy}")
     plt.grid(True, alpha=0.3)
     plt.savefig(plot_path, dpi=150, bbox_inches="tight")
     plt.close()
 
     with report_txt.open("w", encoding="utf-8") as f:
-        f.write("=== Resiliência Interna por Comunidade (E7I) ===\n\n")
+        f.write("=== Robustez Estrutural Interna por Comunidade (E7I) ===\n\n")
         f.write(f"Entrada grafo: {graph_path}\n")
         f.write(f"Entrada comunidades: {communities_path}\n")
         f.write(f"Estratégia: {strategy}\n")

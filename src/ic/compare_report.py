@@ -7,17 +7,20 @@ from typing import Any
 from .graph_inventory import gerar_planilha_grafo
 from .html_report import _as_float, _e, _format_value, _read_csv_dicts
 from .comparison_protocol import auditar_comparabilidade
+from .io_utils import dataset_graph_path
 
 
 COMPARISON_METRICS = [
     ("tamanho", "nodes", "Nos", "Quantidade de intersecoes/pontos do grafo."),
     ("tamanho", "edges", "Arestas", "Quantidade de segmentos direcionados."),
-    ("tamanho", "total_length_km", "Extensao total", "Soma dos comprimentos das arestas, em km."),
+    ("tamanho", "directed_routing_length_km", "Extensão dirigida de roteamento", "Soma dos arcos dirigidos; pares recíprocos podem contar o mesmo trecho duas vezes."),
+    ("tamanho", "physical_collapsed_length_km", "Extensão física colapsada", "Proxy com um segmento por par não ordenado; preferível para comparar extensão física da malha."),
     ("tamanho", "named_streets_unique", "Vias nomeadas", "Nomes distintos de vias no OSM."),
     ("normalizacao", "clip_area_km2", "Area do recorte", "Area do limite administrativo em km2."),
     ("normalizacao", "nodes_per_km2", "Nos por km2", "Quantidade de nos normalizada pela area do recorte."),
     ("normalizacao", "edges_per_km2", "Arestas por km2", "Quantidade de arestas direcionadas normalizada pela area do recorte."),
-    ("normalizacao", "total_length_km_per_km2", "Extensao por km2", "Extensao viaria direcionada normalizada pela area do recorte."),
+    ("normalizacao", "directed_routing_length_km_per_km2", "Extensão dirigida por km²", "Extensão de roteamento dirigida normalizada pela área do recorte."),
+    ("normalizacao", "physical_collapsed_length_km_per_km2", "Densidade viária física", "Proxy de extensão física colapsada normalizada pela área do recorte."),
     ("topologia", "degree_mean", "Grau medio", "Media do grau dos nos na maior componente."),
     ("topologia", "degree_max", "Grau maximo", "Maior grau observado."),
     ("topologia", "density", "Densidade", "Densidade do grafo nao direcionado."),
@@ -142,12 +145,12 @@ COMPARISON_METRICS = [
     ("eficiencia_od", "od_efficiency_accessibility_within_5km_rate", "Acessibilidade até 5 km", "Fração dos pares OD com rota até 5 km."),
     ("eficiencia_od", "od_efficiency_accessibility_within_10km_rate", "Acessibilidade até 10 km", "Fração dos pares OD com rota até 10 km."),
     ("eficiencia_od", "od_efficiency_high_detour_rate", "Taxa de alto desvio OD", "Fração dos pares com circuity acima de 1,75."),
-    ("subcentros", "subcenters_count", "Subcentros", "Quantidade de subcentros topológicos detectados."),
-    ("subcentros", "subcenters_fraction", "Fração de subcentros", "Fração de células povoadas classificadas como subcentros."),
-    ("subcentros", "subcenters_polycentricity_index", "Índice de policentralidade", "Distribuição da importância estrutural entre subcentros."),
-    ("subcentros", "subcenters_monocentricity_index", "Índice de monocentralidade", "Participação do principal subcentro no score total."),
-    ("subcentros", "subcenters_score_entropy", "Entropia dos subcentros", "Entropia normalizada dos scores dos subcentros."),
-    ("subcentros", "subcenters_top_score", "Maior score de subcentro", "Score do principal subcentro topológico."),
+    ("subcentros", "subcenters_count", "Células candidatas", "Quantidade de células candidatas de alta centralidade topológica."),
+    ("subcentros", "subcenters_fraction", "Fração de candidatas", "Fração de células povoadas selecionadas como candidatas topológicas."),
+    ("subcentros", "subcenters_polycentricity_index", "Dispersão exploratória", "Distribuição da importância estrutural entre células candidatas."),
+    ("subcentros", "subcenters_monocentricity_index", "Dominância exploratória", "Participação da principal célula candidata no score total."),
+    ("subcentros", "subcenters_score_entropy", "Entropia das candidatas", "Entropia normalizada dos scores das células candidatas."),
+    ("subcentros", "subcenters_top_score", "Maior score candidato", "Maior score de candidatura topológica."),
     ("barreiras_urbanas", "urban_barriers_spatial_permeability_index", "Permeabilidade espacial", "Permeabilidade média entre células espaciais vizinhas."),
     ("barreiras_urbanas", "urban_barriers_exposure_index", "Exposição a barreiras", "Índice composto de exposição da rede a barreiras topológicas."),
     ("barreiras_urbanas", "urban_barriers_low_permeability_cells", "Células pouco permeáveis", "Quantidade de células com permeabilidade inferior a 0,50."),
@@ -160,13 +163,37 @@ COMPARISON_METRICS = [
     ("perfil_escala", "network_scale_most_stable_score", "Maior estabilidade por escala", "Score de estabilidade da métrica mais estável entre escalas."),
 ]
 
+for _modality, _modality_label in [
+    ("edge", "arestas"),
+    ("node", "vértices"),
+    ("community", "comunidades"),
+]:
+    for _strategy, _strategy_label in [
+        ("random", "aleatória"),
+        ("targeted", "dirigida"),
+        ("targeted_adaptive", "dirigida adaptativa"),
+    ]:
+        for _metric, _metric_label in [
+            ("lcc", "LCC"),
+            ("efficiency_topological", "eficiência topológica"),
+            ("efficiency_length", "eficiência por distância"),
+        ]:
+            COMPARISON_METRICS.append(
+                (
+                    "sintese_robustez",
+                    f"robustness_{_modality}_{_strategy}_{_metric}_auc_normalized_mean",
+                    f"AUC {_metric_label} - {_modality_label} - {_strategy_label}",
+                    "AUC normalizada da resposta retida no intervalo comum; valores maiores indicam maior robustez estrutural.",
+                )
+            )
+
 
 def _safe_name(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in value)
 
 
 def _summary_for_dataset(dataset: str) -> dict[str, dict[str, str]]:
-    graph_path = Path(f"data/graphs/{dataset}_drive_clean.graphml")
+    graph_path = dataset_graph_path(dataset, "clean")
     if not graph_path.exists():
         raise FileNotFoundError(f"Grafo limpo nao encontrado para '{dataset}': {graph_path}")
 
@@ -282,7 +309,11 @@ def _dataset_cards(datasets: list[str], summaries: dict[str, dict[str, dict[str,
         summary = summaries[dataset]
         nodes = _format_value(_value(summary, "nodes"), _unit(summary, "nodes"), "nodes")
         edges = _format_value(_value(summary, "edges"), _unit(summary, "edges"), "edges")
-        length = _format_value(_value(summary, "total_length_km"), _unit(summary, "total_length_km"), "total_length_km")
+        length = _format_value(
+            _value(summary, "physical_collapsed_length_km"),
+            _unit(summary, "physical_collapsed_length_km"),
+            "physical_collapsed_length_km",
+        )
         lcc_drop = _format_value(
             _value(summary, "resilience_targeted_lcc_fraction_drop"),
             _unit(summary, "resilience_targeted_lcc_fraction_drop"),
@@ -305,7 +336,7 @@ def _dataset_cards(datasets: list[str], summaries: dict[str, dict[str, dict[str,
               <div class="mini-grid">
                 <div><strong>{nodes}</strong><span>Nos</span></div>
                 <div><strong>{edges}</strong><span>Arestas</span></div>
-                <div><strong>{length} km</strong><span>Extensao</span></div>
+                <div><strong>{length} km</strong><span>Extensão física (proxy)</span></div>
                 <div><strong>{paved_est}</strong><span>Asfalto estimado</span></div>
                 <div><strong>{surface_known}</strong><span>Surface conhecido</span></div>
                 <div><strong>{lcc_drop}</strong><span>Queda LCC dirigida</span></div>
@@ -491,20 +522,20 @@ def _side_by_side_dashboard(datasets: list[str], output_path: str) -> str:
         _visual_compare_block("Grafo de Ruas + Nos", datasets, "roads_nodes", "image", output_path),
         _visual_compare_block("Grafo por Comunidades", datasets, "communities_graph", "image", output_path),
         _visual_compare_block("Distribuicao de Grau", datasets, "degree", "image", output_path),
-        _visual_compare_block("Resiliencia - Remocao Dirigida", datasets, "resilience_targeted", "image", output_path),
-        _visual_compare_block("Resiliencia - Remocao Dirigida Adaptativa", datasets, "resilience_targeted_adaptive", "image", output_path),
-        _visual_compare_block("Resiliencia - Remocao Aleatoria", datasets, "resilience_random", "image", output_path),
-        _visual_compare_block("Resiliencia - Remocao Aleatoria Agregada", datasets, "resilience_random_aggregate", "image", output_path),
-        _visual_compare_block("Resiliencia por Vertices - Dirigida", datasets, "node_resilience_targeted", "image", output_path),
-        _visual_compare_block("Resiliencia por Vertices - Dirigida Adaptativa", datasets, "node_resilience_targeted_adaptive", "image", output_path),
-        _visual_compare_block("Resiliencia por Vertices - Aleatoria", datasets, "node_resilience_random", "image", output_path),
-        _visual_compare_block("Resiliencia por Vertices - Aleatoria Agregada", datasets, "node_resilience_random_aggregate", "image", output_path),
-        _visual_compare_block("Resiliencia por Comunidades - Dirigida", datasets, "community_resilience_targeted", "image", output_path),
-        _visual_compare_block("Resiliencia por Comunidades - Dirigida Adaptativa", datasets, "community_resilience_targeted_adaptive", "image", output_path),
-        _visual_compare_block("Resiliencia por Comunidades - Aleatoria", datasets, "community_resilience_random", "image", output_path),
-        _visual_compare_block("Resiliencia Interna por Comunidade - Dirigida", datasets, "intra_community_resilience_targeted", "image", output_path),
-        _visual_compare_block("Resiliencia Interna por Comunidade - Dirigida Adaptativa", datasets, "intra_community_resilience_targeted_adaptive", "image", output_path),
-        _visual_compare_block("Resiliencia Interna por Comunidade - Aleatoria", datasets, "intra_community_resilience_random", "image", output_path),
+        _visual_compare_block("Robustez estrutural - Remocao Dirigida", datasets, "resilience_targeted", "image", output_path),
+        _visual_compare_block("Robustez estrutural - Remocao Dirigida Adaptativa", datasets, "resilience_targeted_adaptive", "image", output_path),
+        _visual_compare_block("Robustez estrutural - Remocao Aleatoria", datasets, "resilience_random", "image", output_path),
+        _visual_compare_block("Robustez estrutural - Aleatoria Agregada", datasets, "resilience_random_aggregate", "image", output_path),
+        _visual_compare_block("Robustez por Vertices - Dirigida", datasets, "node_resilience_targeted", "image", output_path),
+        _visual_compare_block("Robustez por Vertices - Dirigida Adaptativa", datasets, "node_resilience_targeted_adaptive", "image", output_path),
+        _visual_compare_block("Robustez por Vertices - Aleatoria", datasets, "node_resilience_random", "image", output_path),
+        _visual_compare_block("Robustez por Vertices - Aleatoria Agregada", datasets, "node_resilience_random_aggregate", "image", output_path),
+        _visual_compare_block("Robustez por Comunidades - Dirigida", datasets, "community_resilience_targeted", "image", output_path),
+        _visual_compare_block("Robustez por Comunidades - Dirigida Adaptativa", datasets, "community_resilience_targeted_adaptive", "image", output_path),
+        _visual_compare_block("Robustez por Comunidades - Aleatoria", datasets, "community_resilience_random", "image", output_path),
+        _visual_compare_block("Robustez Interna por Comunidade - Dirigida", datasets, "intra_community_resilience_targeted", "image", output_path),
+        _visual_compare_block("Robustez Interna por Comunidade - Dirigida Adaptativa", datasets, "intra_community_resilience_targeted_adaptive", "image", output_path),
+        _visual_compare_block("Robustez Interna por Comunidade - Aleatoria", datasets, "intra_community_resilience_random", "image", output_path),
         _visual_compare_block("Mapa de Rota", datasets, "route_map", "iframe", output_path),
         _visual_compare_block("Mapa de Pontos Criticos", datasets, "critical_map", "iframe", output_path),
         _visual_compare_block("Mapa de Arestas Criticas", datasets, "critical_edges_map", "iframe", output_path),
@@ -525,7 +556,7 @@ def _side_by_side_dashboard(datasets: list[str], output_path: str) -> str:
         _visual_compare_block("Mapa Morfologico - Entropia Angular", datasets, "urban_morphology_entropy_map", "iframe", output_path),
         _visual_compare_block("Mapa Morfologico - Conectividade", datasets, "urban_morphology_connectivity_map", "iframe", output_path),
         _visual_compare_block("Mapa Eficiencia OD - Rotas com Maior Desvio", datasets, "od_efficiency_map", "iframe", output_path),
-        _visual_compare_block("Mapa de Subcentros e Policentralidade", datasets, "subcenters_map", "iframe", output_path),
+        _visual_compare_block("Mapa de Células Candidatas de Alta Centralidade", datasets, "subcenters_map", "iframe", output_path),
         _visual_compare_block("Mapa de Barreiras Urbanas - Permeabilidade", datasets, "urban_barriers_permeability_map", "iframe", output_path),
         _visual_compare_block("Mapa de Barreiras Urbanas - Conexoes", datasets, "urban_barriers_connections_map", "iframe", output_path),
         _visual_compare_block("Perfil de Escala - Metricas", datasets, "network_scale_metrics", "image", output_path),
@@ -721,8 +752,9 @@ def gerar_comparacao_html(datasets: list[str], output_path: str | None = None) -
     audit_notice = (
         "<section class=\"panel wide\"><h2>Status de Comparabilidade</h2>"
         f"<p><strong>{_e(audit['status'].upper())}</strong>: "
-        "recortes, datas e cobertura experimental foram auditados. "
-        "Quando o status for exploratorio, os valores podem ser observados, mas não sustentam inferências fortes.</p></section>"
+        "a auditoria científica é fechada à falta de evidência. "
+        "Somente o estado CONFIRMADA autoriza a comparação; NAO_COMPROVADA e "
+        "INCOMPARAVEL permitem apenas inspeção descritiva, sem inferência entre cidades.</p></section>"
     )
     html_doc = f"""<!doctype html>
 <html lang="pt-BR">

@@ -11,7 +11,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import simple_undirected_min_length_graph
 from .resilience import _efficiency_retained, _largest_cc_stats
 
@@ -82,14 +82,16 @@ def testar_resiliencia_vertices(
     k_node: int = 80,
     efficiency_samples: int = 20,
     seed: int = 42,
+    evaluation_seed: int | None = None,
     output_suffix: str | None = None,
 ) -> dict:
     """Remove exclusivamente vértices e mede a degradação da rede."""
     ensure_city_dirs(city_id)
+    evaluation_seed = seed if evaluation_seed is None else evaluation_seed
     if not 0 < max_fraction < 1:
         raise ValueError("max_fraction deve estar no intervalo (0, 1).")
 
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     print(f"[E7V] Carregando grafo: {graph_path}", flush=True)
     G_dir = load_graphml(graph_path)
     Gu = simple_undirected_min_length_graph(G_dir)
@@ -124,16 +126,42 @@ def testar_resiliencia_vertices(
     efficiency_sources = (
         original_node_list
         if len(original_node_list) <= efficiency_samples
-        else random.Random(seed).sample(original_node_list, efficiency_samples)
+        else random.Random(evaluation_seed).sample(original_node_list, efficiency_samples)
     )
 
-    eff0 = _efficiency_on_original_nodes(G, n0, efficiency_samples, seed, sampled_original_nodes=efficiency_sources)
-    eff_len0 = _efficiency_on_original_nodes(G, n0, efficiency_samples, seed, weight="length", sampled_original_nodes=efficiency_sources)
+    eff0 = _efficiency_on_original_nodes(
+        G,
+        n0,
+        efficiency_samples,
+        evaluation_seed,
+        sampled_original_nodes=efficiency_sources,
+    )
+    eff_len0 = _efficiency_on_original_nodes(
+        G,
+        n0,
+        efficiency_samples,
+        evaluation_seed,
+        weight="length",
+        sampled_original_nodes=efficiency_sources,
+    )
 
     def record_state() -> None:
         size_lcc, num_components = _largest_cc_stats(G)
-        eff = _efficiency_on_original_nodes(G, n0, efficiency_samples, seed, sampled_original_nodes=efficiency_sources)
-        eff_len = _efficiency_on_original_nodes(G, n0, efficiency_samples, seed, weight="length", sampled_original_nodes=efficiency_sources)
+        eff = _efficiency_on_original_nodes(
+            G,
+            n0,
+            efficiency_samples,
+            evaluation_seed,
+            sampled_original_nodes=efficiency_sources,
+        )
+        eff_len = _efficiency_on_original_nodes(
+            G,
+            n0,
+            efficiency_samples,
+            evaluation_seed,
+            weight="length",
+            sampled_original_nodes=efficiency_sources,
+        )
         remaining = G.number_of_nodes()
         records.append({
             "removed_nodes": removed,
@@ -190,23 +218,25 @@ def testar_resiliencia_vertices(
     plt.plot(xs, [row["efficiency_topological_retained"] for row in records], marker="s", label="Eficiência topológica retida")
     plt.xlabel("Fração de vértices removidos")
     plt.ylabel("Fração retida")
-    plt.title(f"Resiliência por remoção de vértices ({city_id}) — {strategy}")
+    plt.title(f"Robustez estrutural por remoção de vértices ({city_id}) — {strategy}")
     plt.grid(True)
     plt.legend()
     plt.savefig(curve_plot, dpi=150, bbox_inches="tight")
     plt.close()
 
     with report_txt.open("w", encoding="utf-8") as f:
-        f.write("=== Resiliência por Remoção de Vértices (E7V) ===\n\n")
+        f.write("=== Robustez Estrutural por Remoção de Vértices (E7V) ===\n\n")
         f.write(f"Entrada: {graph_path}\nGrafo analisado: nós={n0} arestas={m0}\n")
         f.write(f"Estratégia: {strategy}\nMax fraction removida: {max_fraction}\nSteps: {steps}\n")
-        f.write(f"k_node (targeted): {k_node}\nefficiency_samples: {efficiency_samples}\n\n")
+        f.write(f"k_node (targeted): {k_node}\nefficiency_samples: {efficiency_samples}\n")
+        f.write(f"attack_seed: {seed}\nevaluation_seed: {evaluation_seed}\n\n")
         f.write("Notas metodológicas:\n")
         f.write("  - Esta análise remove exclusivamente vértices; a análise por arestas permanece separada.\n")
         f.write("  - Grafo simples, não-direcionado e maior componente conectada.\n")
         f.write("  - targeted usa node betweenness aproximada inicial; targeted_adaptive recalcula por etapa.\n")
         f.write("  - LCC e eficiência usam os nós originais como denominador; vértices removidos contam como desconectados.\n\n")
         f.write("  - As mesmas fontes amostradas são mantidas em todos os pontos da curva para reduzir ruído.\n\n")
+        f.write("  - A semente do ataque é separada da semente usada para amostrar a eficiência.\n\n")
         f.write("Último ponto:\n")
         for key, value in records[-1].items():
             f.write(f"  {key} = {value}\n")

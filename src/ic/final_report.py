@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
+import shlex
 import subprocess
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 from importlib import metadata
+
+from .provenance import git_worktree_state
+from .io_utils import dataset_graph_path, dataset_metadata_path
 
 
 def _read_kv_csv(path: str) -> Dict[str, str]:
@@ -91,12 +97,77 @@ def _git_value(args: list[str]) -> str:
         return "indisponivel"
 
 
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _fingerprint_file(path: str) -> dict[str, object] | None:
+    target = Path(path)
+    if not target.is_file():
+        return None
+    stat = target.stat()
+    return {
+        "path": target.as_posix(),
+        "sha256": _sha256_file(target),
+        "size_bytes": stat.st_size,
+        "mtime_utc": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+    }
+
+
+def _latest_cli_runs(city_id: str) -> list[dict[str, object]]:
+    path = Path(f"outputs/{city_id}/logs/cli_runs.jsonl")
+    if not path.exists():
+        return []
+    latest: dict[str, dict[str, object]] = {}
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        command = str(row.get("command") or "unknown")
+        latest[command] = row
+    return [latest[key] for key in sorted(latest)]
+
+
+def _is_mutable_control_file(path: str | Path) -> bool:
+    target = Path(path)
+    return target.name == "cli_runs.jsonl" and target.parent.name in {"logs", "experiments"}
+
+
 def _write_experiment_manifest(city_id: str, outputs_root: str, files: list[str]) -> str:
     manifest_json = f"{outputs_root}/EXPERIMENT_MANIFEST_{city_id}.json"
+    input_candidates = [
+        str(dataset_graph_path(city_id, "raw")),
+        str(dataset_graph_path(city_id, "clean")),
+        str(dataset_metadata_path(city_id, "raw")),
+    ]
+    output_fingerprints = [
+        item
+        for path in files
+        if not _is_mutable_control_file(path)
+        and (item := _fingerprint_file(path)) is not None
+    ]
+    input_fingerprints = [
+        item for path in input_candidates if (item := _fingerprint_file(path)) is not None
+    ]
+    latest_runs = _latest_cli_runs(city_id)
+    git_state = git_worktree_state()
     payload = {
+        "schema_version": "2.0",
         "city_id": city_id,
-        "generated_at": __import__("datetime").datetime.now().isoformat(timespec="seconds"),
-        "recommended_command": f"ic report --city {city_id}",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "manifest_scope": "snapshot dos arquivos existentes; ausência de uma etapa não é sucesso implícito",
+        "outputs_complete": True,
+        "actual_report_argv": list(sys.argv),
+        "actual_report_command_line": shlex.join(sys.argv),
+        "provenance_log": f"outputs/{city_id}/logs/cli_runs.jsonl",
+        "latest_recorded_run_by_command": latest_runs,
         "python": sys.version.replace("\n", " "),
         "packages": {
             "osmnx": _package_version("osmnx"),
@@ -108,15 +179,15 @@ def _write_experiment_manifest(city_id: str, outputs_root: str, files: list[str]
             "folium": _package_version("folium"),
         },
         "git": {
-            "commit": _git_value(["rev-parse", "HEAD"]),
-            "branch": _git_value(["branch", "--show-current"]),
+            "commit": git_state.get("commit") or _git_value(["rev-parse", "HEAD"]),
+            "branch": git_state.get("branch") or _git_value(["branch", "--show-current"]),
+            "dirty": git_state.get("dirty"),
             "dirty_files": _git_value(["status", "--short"]),
+            "diff_sha256": git_state.get("diff_sha256"),
+            "dirty_diff_sha256": git_state.get("diff_sha256"),
         },
-        "inputs": {
-            "graphml_clean": f"data/graphs/{city_id}_drive_clean.graphml",
-            "metadata_raw": f"data/metadata/{city_id}_drive_raw.json",
-        },
-        "outputs": files,
+        "inputs": input_fingerprints,
+        "outputs": output_fingerprints,
     }
     Path(manifest_json).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest_json
@@ -157,7 +228,7 @@ def gerar_relatorio_final(city_id: str) -> dict:
     manifest_txt = f"{outputs_root}/MANIFEST_{city_id}.txt"
 
     # --- Metadados do download (E1) ---
-    meta_json_path = f"data/metadata/{city_id}_drive_raw.json"
+    meta_json_path = str(dataset_metadata_path(city_id, "raw"))
     meta: Dict[str, object] = {}
     mp = Path(meta_json_path)
     if mp.exists():
@@ -199,6 +270,9 @@ def gerar_relatorio_final(city_id: str) -> dict:
     comm_res_target_adaptive_csv = f"{metrics_dir}/community_resilience_curve_targeted_adaptive.csv"
     comm_res_rand_csv = f"{metrics_dir}/community_resilience_curve_random.csv"
     comm_res_top_edges_csv = f"{metrics_dir}/community_resilience_top_edges.csv"
+    robustness_summary_csv = f"{metrics_dir}/robustness_summary.csv"
+    robustness_summary_plot = f"{figs_dir}/robustness_summary_auc.png"
+    robustness_losses_plot = f"{figs_dir}/robustness_summary_losses.png"
     res_target_plot = f"{figs_dir}/resilience_curve_targeted.png"
     res_target_adaptive_plot = f"{figs_dir}/resilience_curve_targeted_adaptive.png"
     res_rand_plot = f"{figs_dir}/resilience_curve_random.png"
@@ -268,11 +342,10 @@ def gerar_relatorio_final(city_id: str) -> dict:
     # --- E3 figura ---
     degree_plot = f"{figs_dir}/degree_distribution_loglog.png"
 
-    # Manifest
+    # Os manifests são fechados somente depois do relatório, para que o próprio
+    # relatório e todos os artefatos já existentes possam ser inventariados.
     Path(outputs_root).mkdir(parents=True, exist_ok=True)
-    files = _list_files(outputs_root)
-    Path(manifest_txt).write_text("\n".join(files) + "\n", encoding="utf-8")
-    manifest_json = _write_experiment_manifest(city_id, outputs_root, files)
+    manifest_json = f"{outputs_root}/EXPERIMENT_MANIFEST_{city_id}.json"
 
     # Bloco E3
     if structural:
@@ -363,12 +436,13 @@ def gerar_relatorio_final(city_id: str) -> dict:
     network_scale_scales_preview = _fmt_md_table(_read_csv_rows(network_scale_scales_csv, limit=10))
     network_scale_stability_preview = _fmt_md_table(_read_csv_rows(network_scale_stability_csv, limit=10))
     network_scale_cells_preview = _fmt_md_table(_read_csv_rows(network_scale_cells_csv, limit=10))
+    robustness_summary_preview = _fmt_md_table(_read_csv_rows(robustness_summary_csv, limit=40))
 
     # Trechos de logs
     centrality_text = _read_text(centrality_report).strip()
     comm_text = _read_text(comm_report).strip()
 
-    # Resiliência: último ponto
+    # Robustez estrutural: último ponto
     last_target = _last_row(res_target_csv)
     last_target_adaptive = _last_row(res_target_adaptive_csv)
     last_random = _last_row(res_rand_csv)
@@ -517,7 +591,7 @@ def gerar_relatorio_final(city_id: str) -> dict:
                     "internal_edges": "arestas internas",
                     "final_lcc_fraction": "LCC final",
                     "lcc_fraction_drop": "queda LCC",
-                    "resilience_auc_lcc": "AUC resiliência LCC",
+                    "resilience_auc_lcc": "AUC de robustez estrutural da LCC",
                 },
             )
             intra_comm_block.append(f"### {label}: comunidades mais frágeis\n")
@@ -572,7 +646,7 @@ def gerar_relatorio_final(city_id: str) -> dict:
     if Path(od_efficiency_map).exists():
         links.append(f"- Mapa de eficiência OD por rotas com maior desvio: `{_rel_to_outputs(od_efficiency_map, outputs_root)}`")
     if Path(subcenters_map).exists():
-        links.append(f"- Mapa de subcentros e policentralidade: `{_rel_to_outputs(subcenters_map, outputs_root)}`")
+        links.append(f"- Mapa de células candidatas de alta centralidade: `{_rel_to_outputs(subcenters_map, outputs_root)}`")
     if Path(urban_barriers_permeability_map).exists():
         links.append(f"- Mapa de barreiras urbanas por permeabilidade: `{_rel_to_outputs(urban_barriers_permeability_map, outputs_root)}`")
     if Path(urban_barriers_connections_map).exists():
@@ -586,13 +660,17 @@ def gerar_relatorio_final(city_id: str) -> dict:
     if Path(comm_map).exists():
         links.append(f"- Mapa de comunidades: `{_rel_to_outputs(comm_map, outputs_root)}`")
     if Path(res_target_adaptive_plot).exists():
-        links.append(f"- Resiliência adaptativa: `{_rel_to_outputs(res_target_adaptive_plot, outputs_root)}`")
+        links.append(f"- Robustez estrutural adaptativa: `{_rel_to_outputs(res_target_adaptive_plot, outputs_root)}`")
     if Path(node_res_target_plot).exists():
-        links.append(f"- Resiliência por remoção de vértices: `{_rel_to_outputs(node_res_target_plot, outputs_root)}`")
+        links.append(f"- Robustez estrutural por remoção de vértices: `{_rel_to_outputs(node_res_target_plot, outputs_root)}`")
     if Path(comm_res_target_plot).exists():
-        links.append(f"- Resiliência entre comunidades: `{_rel_to_outputs(comm_res_target_plot, outputs_root)}`")
+        links.append(f"- Robustez estrutural entre comunidades: `{_rel_to_outputs(comm_res_target_plot, outputs_root)}`")
     if Path(intra_comm_target_plot).exists():
-        links.append(f"- Resiliência interna por comunidade: `{_rel_to_outputs(intra_comm_target_plot, outputs_root)}`")
+        links.append(f"- Robustez estrutural interna por comunidade: `{_rel_to_outputs(intra_comm_target_plot, outputs_root)}`")
+    if Path(robustness_summary_plot).exists():
+        links.append(f"- Síntese quantitativa da robustez (AUC): `{_rel_to_outputs(robustness_summary_plot, outputs_root)}`")
+    if Path(robustness_losses_plot).exists():
+        links.append(f"- Perdas de robustez em frações padronizadas: `{_rel_to_outputs(robustness_losses_plot, outputs_root)}`")
     if Path(route_map).exists():
         links.append(f"- Mapa de rota (E4): `{_rel_to_outputs(route_map, outputs_root)}`")
     links.append(f"- Lista de arquivos gerados (manifest): `{_rel_to_outputs(manifest_txt, outputs_root)}`")
@@ -621,19 +699,20 @@ def gerar_relatorio_final(city_id: str) -> dict:
         "- **E4:** Rotas por distância (ponderado por `length`)\n"
         "- **E5:** Centralidades (pontos críticos)\n"
         "- **E6:** Comunidades (modularidade)\n"
-        "- **E7:** Resiliência (remoção de arestas)\n"
-        "- **E7V:** Resiliência por remoção de vértices\n"
-        "- **E7C:** Resiliência entre comunidades (grafo agregado)\n"
-        "- **E7I:** Resiliência interna de cada comunidade\n"
+        "- **E7:** Robustez estrutural por remoção de arestas (nome de arquivo legado: resilience)\n"
+        "- **E7V:** Robustez estrutural por remoção de vértices\n"
+        "- **E7C:** Robustez estrutural entre comunidades (grafo agregado)\n"
+        "- **E7I:** Robustez estrutural interna de cada comunidade\n"
+        "- **Síntese de robustez:** AUC normalizada, perdas em frações padronizadas e limiares de degradação\n"
         "- **Vulnerabilidade:** Índice composto de criticidade de nós e arestas\n"
         "- **Gargalos estruturais:** Pontes, articulações e impacto direto de fragmentação\n"
         "- **Redundância de rotas:** Alternativas OD após bloqueio da melhor rota\n"
         "- **Multiescala espacial:** Métricas locais por células regulares\n"
         "- **Robustez espacial:** Impacto global de bloqueios regionais por célula\n"
         "- **Hierarquia viária:** Contribuição de classes `highway` para conectividade e robustez\n"
-        "- **Morfologia urbana:** Comparação entre padrões de planejamento e estrutura local da rede\n"
+        "- **Morfologia heurística:** Perfil de orientação e conectividade local da rede\n"
         "- **Eficiência OD:** Estatística de rotas em múltiplos pares origem-destino\n"
-        "- **Subcentros:** Detecção de centralidade policêntrica por regiões da rede\n"
+        "- **Candidatos topológicos:** Células de alta centralidade; não valida policentralidade urbana\n"
         "- **Barreiras urbanas:** Exposição da rede a baixa permeabilidade espacial e travessias frágeis\n"
         "- **Perfil de escala:** Sensibilidade das métricas espaciais a células de tamanhos diferentes\n"
         "- **E8:** Consolidação (este relatório)\n"
@@ -664,18 +743,33 @@ def gerar_relatorio_final(city_id: str) -> dict:
         md.append("\n### Relatório (trecho)\n")
         md.append("```text\n" + "\n".join(comm_text.splitlines()[:25]) + "\n```")
 
-    md.append("\n## 6. Resiliência (E7)\n")
+    md.append("\n## 6. Robustez estrutural por arestas (E7)\n")
     md.append(res_block_md)
 
-    md.append("\n## 7. Resiliência por remoção de vértices (E7V)\n")
+    md.append("\n## 7. Robustez estrutural por remoção de vértices (E7V)\n")
     md.append("Esta análise remove exclusivamente vértices e permanece separada da remoção de arestas.\n")
     md.append(node_res_block_md)
 
-    md.append("\n## 8. Resiliência entre comunidades (E7C)\n")
+    md.append("\n## 8. Robustez estrutural entre comunidades (E7C)\n")
     md.append(comm_res_block_md)
 
-    md.append("\n## 9. Resiliência interna por comunidade (E7I)\n")
+    md.append("\n## 9. Robustez estrutural interna por comunidade (E7I)\n")
     md.append(intra_comm_block_md)
+
+    md.append("\n## 9.1 Síntese quantitativa das curvas de robustez\n")
+    md.append(
+        "A síntese integra cada curva no maior intervalo de remoção comum entre cidades e "
+        "estratégias. A AUC normalizada representa a retenção média da resposta: valores maiores "
+        "indicam maior robustez estrutural. Também são registrados valores/perdas em 1%, 5%, 10% "
+        "e 15% e a primeira fração que reduz a resposta abaixo de 90%, 75% e 50%. Modalidades de "
+        "nós, arestas e comunidades permanecem separadas. Desvio e IC só têm significado quando "
+        "há repetição; campos vazios indicam incerteza não estimada, nunca zero.\n"
+    )
+    md.append(robustness_summary_preview)
+    if Path(robustness_summary_plot).exists():
+        md.append(f"\n- Figura: `{_rel_to_outputs(robustness_summary_plot, outputs_root)}`")
+    if Path(robustness_losses_plot).exists():
+        md.append(f"\n- Figura de perdas: `{_rel_to_outputs(robustness_losses_plot, outputs_root)}`")
 
     md.append("\n## 10. Pontes, articulações e gargalos estruturais\n")
     md.append(
@@ -702,7 +796,7 @@ def gerar_relatorio_final(city_id: str) -> dict:
     md.append("\n### Pares origem-destino analisados\n")
     md.append(route_redundancy_pairs_preview)
 
-    md.append("\n## 12. Análise multiescala espacial\n")
+    md.append("\n## 12. Análise espacial por grade\n")
     md.append(
         "Esta análise divide a cidade em células espaciais regulares e calcula métricas locais no "
         "subgrafo de cada célula. O objetivo é revelar desigualdades internas que podem ficar "
@@ -713,9 +807,9 @@ def gerar_relatorio_final(city_id: str) -> dict:
     md.append("\n### Células com maior risco local\n")
     md.append(spatial_multiscale_cells_preview)
 
-    md.append("\n## 13. Robustez espacial por bloqueios regionais\n")
+    md.append("\n## 13. Robustez sob bloqueios regionais estilizados\n")
     md.append(
-        "Esta análise simula falhas concentradas no espaço. Para cada célula da grade, as vias "
+        "Esta análise simula falhas concentradas no espaço sem atribuir hazard ou probabilidade. Para cada célula da grade, as vias "
         "associadas à região são removidas e o impacto é medido no grafo inteiro por queda da "
         "maior componente, fragmentação e eficiência retida.\n"
     )
@@ -727,7 +821,7 @@ def gerar_relatorio_final(city_id: str) -> dict:
     md.append("\n## 14. Hierarquia viária\n")
     md.append(
         "Esta análise agrupa as arestas pelo atributo OSM `highway` e mede como cada classe de via "
-        "contribui para extensão, conectividade, centralidade observada, vulnerabilidade e resiliência "
+        "contribui para extensão, conectividade, centralidade observada, vulnerabilidade e robustez "
         "global quando a classe é removida.\n"
     )
     md.append("\n### Resumo\n")
@@ -735,12 +829,12 @@ def gerar_relatorio_final(city_id: str) -> dict:
     md.append("\n### Métricas por classe highway\n")
     md.append(road_hierarchy_by_class_preview)
 
-    md.append("\n## 15. Planejamento urbano x estrutura da rede\n")
+    md.append("\n## 15. Perfil heurístico de orientação e conectividade\n")
     md.append(
         "Esta análise classifica células espaciais como gradeadas, radiais/lineares, orgânicas, "
         "fragmentadas ou mistas usando orientação das vias, entropia angular, conectividade local, "
-        "maior componente e comprimento médio dos segmentos. O objetivo é aproximar a leitura de "
-        "morfologia urbana a partir da estrutura do grafo viário.\n"
+        "maior componente e comprimento médio dos segmentos. As classes são heurísticas e dependem "
+        "de limiares; não identificam planejamento urbano observado sem validação externa.\n"
     )
     md.append("\n### Resumo\n")
     md.append(urban_morphology_summary_preview)
@@ -751,25 +845,26 @@ def gerar_relatorio_final(city_id: str) -> dict:
     md.append(
         "Esta análise amostra vários pares origem-destino no grafo dirigido e calcula a menor "
         "rota por distância. Para cada par, registra distância da rota, distância direta "
-        "geográfica, desvio/circuity, eficiência relativa, hops e acessibilidade por limiares "
-        "de distância. Isso transforma a rota pontual em uma distribuição estatística comparável.\n"
+        "geográfica, desvio/circuity, eficiência relativa, hops e fração abaixo de limiares "
+        "de distância. A distribuição é induzida pela amostragem uniforme de nós e não representa "
+        "demanda OD nem acessibilidade observada da população.\n"
     )
     md.append("\n### Resumo\n")
     md.append(od_efficiency_summary_preview)
     md.append("\n### Pares com maior desvio\n")
     md.append(od_efficiency_pairs_preview)
 
-    md.append("\n## 17. Subcentros e centralidade policêntrica\n")
+    md.append("\n## 17. Células candidatas de alta centralidade topológica\n")
     md.append(
         "Esta análise divide a cidade em células espaciais e identifica regiões que concentram "
         "importância estrutural. O score combina centralidade acumulada, centralidade máxima, "
         "densidade local, conectividade, proximidade, autovetor e diversidade de comunidades "
-        "tocadas. A distribuição dos scores dos subcentros é usada para estimar policentralidade "
-        "ou dependência de um centro dominante.\n"
+        "tocadas. A distribuição dos scores descreve concentração ou dispersão topológica entre "
+        "candidatos. Sem empregos, população, atividades ou fluxos, não mede policentralidade urbana.\n"
     )
     md.append("\n### Resumo\n")
     md.append(subcenters_summary_preview)
-    md.append("\n### Subcentros detectados\n")
+    md.append("\n### Células candidatas selecionadas\n")
     md.append(subcenters_preview)
     md.append("\n### Ranking de centralidade por região\n")
     md.append(subcenters_cells_preview)
@@ -828,6 +923,16 @@ def gerar_relatorio_final(city_id: str) -> dict:
     md.append(approximation_validation_preview)
 
     Path(report_md).write_text("\n".join(md) + "\n", encoding="utf-8")
+
+    excluded = {Path(manifest_txt), Path(manifest_json)}
+    files = [
+        path
+        for path in _list_files(outputs_root)
+        if Path(path) not in excluded and not _is_mutable_control_file(path)
+    ]
+    Path(manifest_txt).write_text("\n".join(files) + "\n", encoding="utf-8")
+    files.append(manifest_txt)
+    manifest_json = _write_experiment_manifest(city_id, outputs_root, files)
 
     return {
         "report_md": report_md,

@@ -11,8 +11,8 @@ from typing import Any, Iterable
 
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
-from .metric_graphs import simple_undirected_min_length_graph
+from .io_utils import dataset_graph_path, dataset_metadata_path, ensure_city_dirs, load_graphml
+from .metric_graphs import collapsed_physical_length_m, simple_undirected_min_length_graph
 
 
 PAVED_SURFACES = {
@@ -353,6 +353,57 @@ def _add_existing_pipeline_outputs(summary_rows: list[list[Any]], city_id: str) 
         except ValueError:
             pass
 
+    robustness_summary = _read_csv_dicts(f"{metrics_dir}/robustness_summary.csv")
+    if robustness_summary:
+        _add_metric(
+            summary_rows,
+            "sintese_robustez",
+            "robustness_summary_rows",
+            len(robustness_summary),
+            "linhas",
+            "Quantidade de respostas sintetizadas por modalidade, estratégia e métrica.",
+        )
+        for row in robustness_summary:
+            modality = row.get("modality", "")
+            strategy = row.get("strategy", "")
+            metric = row.get("metric", "")
+            if not modality or not strategy or not metric:
+                continue
+            prefix = f"robustness_{modality}_{strategy}_{metric}"
+            _add_metric(
+                summary_rows,
+                "sintese_robustez",
+                f"{prefix}_auc_normalized_mean",
+                row.get("auc_normalized_mean", ""),
+                "razao",
+                "AUC normalizada da resposta retida; valores maiores indicam maior robustez no intervalo comum.",
+            )
+            _add_metric(
+                summary_rows,
+                "sintese_robustez",
+                f"{prefix}_analysis_max_fraction",
+                row.get("analysis_max_fraction", ""),
+                "fracao",
+                "Maior fração removida comum usada na integração da curva.",
+            )
+            _add_metric(
+                summary_rows,
+                "sintese_robustez",
+                f"{prefix}_repetitions",
+                row.get("repetitions", ""),
+                "execucoes",
+                "Quantidade de curvas usadas para estimar a AUC e sua dispersão.",
+            )
+    else:
+        _add_metric(
+            summary_rows,
+            "sintese_robustez",
+            "robustness_summary_available",
+            "nao",
+            "booleano",
+            "Arquivo robustness_summary.csv nao encontrado.",
+        )
+
     for strategy in ["targeted", "targeted_adaptive", "random"]:
         resilience = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_{strategy}.csv")
         if not resilience:
@@ -412,7 +463,7 @@ def _add_existing_pipeline_outputs(summary_rows: list[list[Any]], city_id: str) 
             f"intra_community_resilience_{strategy}_communities",
             len(summaries),
             "comunidades",
-            f"Quantidade de comunidades com resiliência interna calculada na estratégia {strategy}.",
+            f"Quantidade de comunidades com robustez estrutural interna calculada na estratégia {strategy}.",
         )
         if auc_values:
             _add_metric(
@@ -584,14 +635,14 @@ def _add_existing_pipeline_outputs(summary_rows: list[list[Any]], city_id: str) 
 
     subcenters = {row.get("metric", ""): row.get("value", "") for row in _read_csv_dicts(f"{metrics_dir}/subcenters_summary.csv")}
     if subcenters:
-        _add_metric(summary_rows, "subcentros", "subcenters_count", subcenters.get("subcenters_count", ""), "subcentros", "Quantidade de subcentros topológicos detectados.")
-        _add_metric(summary_rows, "subcentros", "subcenters_fraction", subcenters.get("subcenters_fraction", ""), "percentual", "Fração de células povoadas classificadas como subcentros.")
-        _add_metric(summary_rows, "subcentros", "subcenters_polycentricity_index", subcenters.get("polycentricity_index", ""), "razao", "Índice de policentralidade baseado na distribuição dos scores dos subcentros.")
-        _add_metric(summary_rows, "subcentros", "subcenters_monocentricity_index", subcenters.get("monocentricity_index", ""), "razao", "Participação do principal subcentro no score total dos subcentros.")
-        _add_metric(summary_rows, "subcentros", "subcenters_score_entropy", subcenters.get("subcenter_score_entropy", ""), "razao", "Entropia normalizada da distribuição de scores dos subcentros.")
-        _add_metric(summary_rows, "subcentros", "subcenters_top_score_share", subcenters.get("top_subcenter_score_share", ""), "percentual", "Participação do subcentro principal no score total dos subcentros.")
-        _add_metric(summary_rows, "subcentros", "subcenters_top_cell", subcenters.get("top_subcenter_cell", ""), "cell_id", "Célula com maior score de subcentro.")
-        _add_metric(summary_rows, "subcentros", "subcenters_top_score", subcenters.get("top_subcenter_score", ""), "razao", "Maior score de subcentro observado.")
+        _add_metric(summary_rows, "subcentros", "subcenters_count", subcenters.get("subcenters_count", ""), "candidatos", "Quantidade de células candidatas de alta centralidade topológica.")
+        _add_metric(summary_rows, "subcentros", "subcenters_fraction", subcenters.get("subcenters_fraction", ""), "percentual", "Fração de células povoadas selecionadas como candidatas topológicas.")
+        _add_metric(summary_rows, "subcentros", "subcenters_polycentricity_index", subcenters.get("polycentricity_index", ""), "razao", "Índice exploratório de dispersão dos scores entre células candidatas.")
+        _add_metric(summary_rows, "subcentros", "subcenters_monocentricity_index", subcenters.get("monocentricity_index", ""), "razao", "Participação da principal célula candidata no score total.")
+        _add_metric(summary_rows, "subcentros", "subcenters_score_entropy", subcenters.get("subcenter_score_entropy", ""), "razao", "Entropia normalizada dos scores das células candidatas.")
+        _add_metric(summary_rows, "subcentros", "subcenters_top_score_share", subcenters.get("top_subcenter_score_share", ""), "percentual", "Participação da principal célula candidata no score total.")
+        _add_metric(summary_rows, "subcentros", "subcenters_top_cell", subcenters.get("top_subcenter_cell", ""), "cell_id", "Célula com maior score de candidatura.")
+        _add_metric(summary_rows, "subcentros", "subcenters_top_score", subcenters.get("top_subcenter_score", ""), "razao", "Maior score de candidatura observado.")
     else:
         _add_metric(summary_rows, "subcentros", "subcenters_available", "nao", "booleano", "Arquivo subcenters_summary.csv nao encontrado.")
 
@@ -640,7 +691,7 @@ def _counter_rows(counter: dict[str, dict[str, float]], total_edges: int, total_
 def gerar_planilha_grafo(city_id: str) -> dict:
     ensure_city_dirs(city_id)
 
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     metrics_dir = f"outputs/{city_id}/metrics"
     logs_dir = f"outputs/{city_id}/logs"
 
@@ -651,8 +702,9 @@ def gerar_planilha_grafo(city_id: str) -> dict:
     total_edges = len(edges)
     total_nodes = len(nodes)
     total_length_m = sum(_length_m(data) for _, _, data in edges)
+    physical_length_m = collapsed_physical_length_m(G_dir)
     names = _unique_names(edges)
-    metadata_path = Path(f"data/metadata/{city_id}_drive_raw.json")
+    metadata_path = dataset_metadata_path(city_id, "raw")
     metadata = json.loads(metadata_path.read_text(encoding="utf-8")) if metadata_path.exists() else {}
     area_km2 = metadata.get("clip", {}).get("area_km2")
     area_km2 = float(area_km2) if area_km2 not in (None, "") else None
@@ -709,16 +761,22 @@ def gerar_planilha_grafo(city_id: str) -> dict:
 
     summary_rows: list[list[Any]] = []
     _add_metric(summary_rows, "identificacao", "city_id", city_id, "texto", "Identificador do dataset analisado.")
+    _add_metric(summary_rows, "identificacao", "resilience_term_scope", "robustez_estrutural_sob_remocao", "definicao", "Arquivos e indicadores com prefixo resilience medem degradação sob remoção; não incluem recuperação no tempo.")
     _add_metric(summary_rows, "identificacao", "graph_path", graph_path, "arquivo", "Arquivo GraphML limpo usado como entrada.")
     _add_metric(summary_rows, "tamanho", "nodes", total_nodes, "nos", "Quantidade de intersecoes/pontos do grafo direcionado.")
     _add_metric(summary_rows, "tamanho", "edges", total_edges, "arestas", "Quantidade de segmentos direcionados de via.")
-    _add_metric(summary_rows, "tamanho", "total_length_km", total_length_m / 1000.0, "km", "Soma dos comprimentos dos segmentos direcionados.")
+    _add_metric(summary_rows, "tamanho", "total_length_km", total_length_m / 1000.0, "km", "Alias legado: soma dos comprimentos dos arcos direcionados; não representa extensão física única.")
+    _add_metric(summary_rows, "tamanho", "directed_routing_length_km", total_length_m / 1000.0, "km", "Soma dos comprimentos dos arcos direcionados, adequada ao inventário de roteamento.")
+    _add_metric(summary_rows, "tamanho", "physical_collapsed_length_km", physical_length_m / 1000.0, "km", "Proxy de extensão física: menor segmento válido por par de nós não ordenado, sem duplicar automaticamente arcos recíprocos.")
+    _add_metric(summary_rows, "tamanho", "directed_to_physical_length_ratio", total_length_m / physical_length_m if physical_length_m else math.nan, "razao", "Razão entre extensão de roteamento dirigida e proxy de extensão física colapsada.")
     _add_metric(summary_rows, "tamanho", "named_streets_unique", len(names), "nomes", "Quantidade de nomes distintos de vias presentes no atributo OSM name.")
     if area_km2:
         _add_metric(summary_rows, "normalizacao", "clip_area_km2", area_km2, "km2", "Area do limite administrativo usada para normalizar a comparacao.")
         _add_metric(summary_rows, "normalizacao", "nodes_per_km2", total_nodes / area_km2, "nos/km2", "Quantidade de nos do grafo por km2 do recorte.")
         _add_metric(summary_rows, "normalizacao", "edges_per_km2", total_edges / area_km2, "arestas/km2", "Quantidade de arestas direcionadas por km2 do recorte.")
-        _add_metric(summary_rows, "normalizacao", "total_length_km_per_km2", (total_length_m / 1000.0) / area_km2, "km/km2", "Extensao viaria direcionada por km2 do recorte.")
+        _add_metric(summary_rows, "normalizacao", "total_length_km_per_km2", (total_length_m / 1000.0) / area_km2, "km/km2", "Alias legado: extensão de roteamento dirigida por km2 do recorte.")
+        _add_metric(summary_rows, "normalizacao", "directed_routing_length_km_per_km2", (total_length_m / 1000.0) / area_km2, "km/km2", "Extensão de roteamento dirigida por km2 do recorte.")
+        _add_metric(summary_rows, "normalizacao", "physical_collapsed_length_km_per_km2", (physical_length_m / 1000.0) / area_km2, "km/km2", "Proxy de extensão física colapsada por km2; preferir esta métrica em comparações de densidade viária.")
     _add_metric(summary_rows, "conectividade", "weak_components_undirected", components_count, "componentes", "Quantidade de componentes conectadas ao ignorar direcao.")
     _add_metric(summary_rows, "conectividade", "largest_component_nodes", largest_component_nodes, "nos", "Quantidade de nos na maior componente conectada.")
     _add_metric(summary_rows, "conectividade", "used_largest_component", "sim" if used_largest_component else "nao", "booleano", "Indica se havia mais de uma componente conectada.")

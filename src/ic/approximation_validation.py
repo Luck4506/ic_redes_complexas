@@ -11,7 +11,7 @@ import networkx as nx
 
 from .centrality import approximate_closeness_centrality
 from .functional_relations import spearman_correlation
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import simple_undirected_min_length_graph
 
 
@@ -53,7 +53,7 @@ def validar_aproximacoes(
     """Compara aproximações com valores exatos em subgrafo conectado controlado."""
     ensure_city_dirs(city_id)
     sample_sizes = sample_sizes or [10, 30, 60, 120]
-    G = simple_undirected_min_length_graph(load_graphml(f"data/graphs/{city_id}_drive_clean.graphml"))
+    G = simple_undirected_min_length_graph(load_graphml(str(dataset_graph_path(city_id, "clean"))))
     if not nx.is_connected(G):
         G = G.subgraph(max(nx.connected_components(G), key=len)).copy()
     H = _connected_sample(G, min(subgraph_size, G.number_of_nodes()), seed)

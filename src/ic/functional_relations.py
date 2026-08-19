@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .graph_inventory import _first_value, _parse_float_values, _surface_category, _values
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import simple_undirected_min_length_graph
 
 
@@ -55,7 +55,7 @@ def spearman_correlation(xs: list[float], ys: list[float]) -> float:
 def analisar_relacoes_funcionais(city_id: str) -> dict:
     """Relaciona atributos funcionais OSM à posição topológica das arestas."""
     ensure_city_dirs(city_id)
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     centrality_path = f"outputs/{city_id}/metrics/node_centralities.csv"
     if not Path(centrality_path).exists():
         raise FileNotFoundError(f"Execute antes: ic centrality --city {city_id}")
@@ -125,12 +125,13 @@ def analisar_relacoes_funcionais(city_id: str) -> dict:
         writer.writerows(correlation_rows)
 
     with report_txt.open("w", encoding="utf-8") as f:
-        f.write("=== Relações entre Topologia e Características Funcionais ===\n\n")
+        f.write("=== Relações entre Topologia e Atributos Viários OSM ===\n\n")
         f.write("Unidade analisada: aresta do grafo simples não direcionado.\n")
         f.write("A posição topológica da aresta é a média das centralidades de seus extremos.\n")
         f.write("Grupos categóricos: highway, surface e oneway.\n")
         f.write("Relações numéricas: correlação de Spearman de maxspeed e lanes com centralidades.\n")
-        f.write("Atributos ausentes no OSM são excluídos das correlações numéricas.\n\n")
+        f.write("Atributos ausentes no OSM são excluídos das correlações numéricas.\n")
+        f.write("Estas associações não medem tráfego, demanda OD, capacidade efetiva nem causalidade.\n\n")
         for row in correlation_rows:
             f.write(
                 f"{row['attribute']} x {row['topology_metric']}: "

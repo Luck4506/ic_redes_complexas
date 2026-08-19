@@ -8,6 +8,8 @@ from typing import Dict, Any, List
 
 import osmnx as ox
 
+from .io_utils import dataset_graph_path
+
 
 def _ensure_kepler_dir(city_id: str) -> Path:
     out_dir = Path(f"outputs/{city_id}/kepler")
@@ -145,7 +147,7 @@ def exportar_para_kepler(city_id: str, which: str = "clean") -> Dict[str, Any]:
 
     out_dir = _ensure_kepler_dir(city_id)
 
-    graph_path = f"data/graphs/{city_id}_drive_{which}.graphml"
+    graph_path = str(dataset_graph_path(city_id, which))
     G = ox.load_graphml(graph_path)
 
     # Converter grafo em GeoDataFrames

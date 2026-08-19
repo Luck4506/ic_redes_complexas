@@ -1,125 +1,157 @@
-# IC - Redes Complexas na Rede Viária
+# IC — Estrutura e robustez de redes viárias urbanas
 
-Pipeline reprodutível para caracterização topológica, centralidade, comunidades, resiliência e
-comparação de redes viárias urbanas brasileiras obtidas do OpenStreetMap.
+Pipeline reprodutível para construir grafos viários do OpenStreetMap, medir sua estrutura e
+avaliar a degradação da conectividade sob remoções controladas. O recorte empírico atualmente
+disponível contém quatro municípios paulistas — Campinas, Jundiaí, Sorocaba e Valinhos — e deve
+ser apresentado como **estudo de caso exploratório**, não como retrato de toda a rede viária
+brasileira.
 
-## Configuração
+## O que o projeto mede
+
+- estrutura topológica, centralidades, comunidades e caminhos mínimos;
+- robustez estrutural sob remoção de arestas, vértices e ligações entre comunidades;
+- gargalos, redundância estrutural de rotas e impactos de bloqueios espaciais estilizados;
+- orientação, morfologia e candidatos a subcentros como **proxies topológicos**;
+- sensibilidade à representação do grafo, à escala espacial e às aproximações numéricas;
+- qualidade, proveniência, integridade e comparabilidade dos artefatos.
+
+Os experimentos não observam tráfego, demanda origem–destino, tempo de viagem, recuperação após
+um evento nem desempenho socioeconômico. Por isso, o termo correto para as curvas implementadas é
+**robustez estrutural**. “Resiliência” só deve aparecer como nome legado de comandos/arquivos ou
+como definição operacional explicitamente limitada; resiliência em sentido forte exigiria uma
+dinâmica de recuperação no tempo.
+
+## Instalação reproduzível por versão
+
+Requer Python 3.11 ou superior; o ambiente validado e a integração contínua usam Python 3.12.
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -U pip
-pip install -e .
+python -m pip install -U pip
+python -m pip install -r requirements-lock.txt
+python -m pip install -e . --no-deps
+python -m unittest discover -s tests -v
 ```
 
-## Pipeline principal
+`requirements-lock.txt` fixa as versões do ambiente validado. Ele ainda não contém hashes dos
+pacotes, portanto não oferece reprodução bit a bit nem verificação completa da cadeia de
+fornecimento. `requirements.txt` e `pyproject.toml` continuam adequados para acompanhar versões
+compatíveis mais recentes, desde que a suíte seja executada novamente.
+
+## Fluxo principal
 
 ```bash
-ic download --city campinas
-ic preprocess --city campinas
-ic structural --city campinas
-ic centrality --city campinas
-ic functional-relations --city campinas
-ic validate-approximations --city campinas
-ic communities --city campinas
-ic resilience --city campinas --strategy targeted
-ic node-resilience --city campinas --strategy targeted
-ic random-resilience-stats --city campinas --mode both
-ic community-resilience --city campinas --strategy targeted
-ic intra-community-resilience --city campinas --strategy targeted
-ic vulnerability-index --city campinas
-ic structural-bottlenecks --city campinas
-ic route-redundancy --city campinas
-ic spatial-multiscale --city campinas
-ic spatial-robustness --city campinas
-ic road-hierarchy --city campinas
-ic urban-morphology --city campinas
-ic od-efficiency --city campinas
-ic subcenters --city campinas
-ic urban-barriers --city campinas
-ic network-scale-profile --city campinas
-ic inventory --city campinas
-ic report --city campinas
-ic dashboard --city campinas
-ic comparison-audit campinas jundiai sorocaba valinhos
-ic city-similarity campinas_admin jundiai_admin sorocaba_admin valinhos_admin
-ic historical-audit --reference campinas campinas_2021 campinas_2024
+ic download --config config/comparable/campinas.yaml
+ic preprocess --city campinas_admin
+ic structural --city campinas_admin
+ic centrality --city campinas_admin
+ic representation-audit --city campinas_admin
+ic validate-approximations --city campinas_admin
+ic communities --city campinas_admin
+
+ic resilience --city campinas_admin --strategy targeted --evaluation-seed 104729
+ic node-resilience --city campinas_admin --strategy targeted --evaluation-seed 104729
+ic random-resilience-stats --city campinas_admin --mode both --repetitions 30 \
+  --master-seed 42 --evaluation-seed 104729 --bootstrap-resamples 2000
+ic community-resilience --city campinas_admin --strategy targeted
+ic intra-community-resilience --city campinas_admin --strategy targeted
+
+ic vulnerability-index --city campinas_admin
+ic structural-bottlenecks --city campinas_admin
+ic route-redundancy --city campinas_admin
+ic spatial-multiscale --city campinas_admin
+ic spatial-robustness --city campinas_admin
+ic road-hierarchy --city campinas_admin
+ic urban-morphology --city campinas_admin
+ic od-efficiency --city campinas_admin
+ic subcenters --city campinas_admin
+ic urban-barriers --city campinas_admin
+ic network-scale-profile --city campinas_admin
+
+ic robustness-summary campinas_admin jundiai_admin sorocaba_admin valinhos_admin
+ic inventory --city campinas_admin
+ic report --city campinas_admin
+ic dashboard --city campinas_admin
+ic artifact-integrity --city campinas_admin
+ic comparison-audit campinas_admin jundiai_admin sorocaba_admin valinhos_admin \
+  --profile cientifico --snapshot-policy same
 ```
 
-Os mesmos comandos aceitam `--year ANO` para datasets históricos. A lista detalhada de
-parâmetros e exemplos está em [config/comandos.md](config/comandos.md).
+Esse exemplo mantém o mesmo identificador administrativo do download ao relatório. Os YAMLs na
+raiz de `config/` representam recortes bbox distintos e geram datasets sem o sufixo `_admin`;
+eles não devem ser misturados com `config/comparable/` na mesma comparação.
 
-Comparações temporais com OSM histórico devem ser auditadas antes da interpretação. O comando
-`historical-audit` mede o viés de cobertura do OSM e classifica cada ano como
-`nao_confiavel`, `exploratorio` ou `comparavel_com_cautela`.
+Os comandos que recebem `--year ANO` usam o identificador histórico correspondente. A lista
+completa de exemplos está em [config/comandos.md](config/comandos.md).
 
-## Análises de resiliência
+## Contratos científicos incorporados
 
-- `resilience`: mede a resiliência do grafo viário inteiro removendo exclusivamente arestas.
-- `node-resilience`: mede a resiliência do grafo viário inteiro removendo exclusivamente
-  vértices. Não combina remoção de vértices e arestas.
-- `community-resilience`: agrega cada comunidade como um nó e mede a resiliência das
-  conexões **entre** comunidades.
-- `intra-community-resilience`: mede separadamente a resiliência **interna de cada
-  comunidade**, removendo arestas de seu subgrafo induzido.
-- `random-resilience-stats`: repete ataques aleatórios com múltiplas sementes e gera curvas
-  agregadas com média, desvio, mínimo e máximo.
-- `vulnerability-index`: combina centralidades, ataques por vértices, articulações, pontes,
-  tipo de via, comprimento e fronteiras entre comunidades em rankings compostos de
-  vulnerabilidade para nós e arestas.
-- `structural-bottlenecks`: identifica pontes, nós de articulação e gargalos estruturais,
-  medindo quantos nós saem da maior componente quando cada elemento crítico é removido.
-- `route-redundancy`: amostra pares origem-destino, bloqueia a melhor rota e mede se ainda
-  existe alternativa razoável de deslocamento.
-- `spatial-multiscale`: divide a área do grafo em células regulares e calcula métricas locais
-  de conectividade, vulnerabilidade e redundância.
-- `spatial-robustness`: simula bloqueios regionais por célula espacial e mede o impacto no
-  grafo inteiro.
-- `road-hierarchy`: mede como classes `highway` contribuem para conectividade, centralidade,
-  vulnerabilidade e resiliência.
-- `urban-morphology`: classifica células como gradeadas, radiais/lineares, orgânicas,
-  fragmentadas ou mistas a partir de orientação das vias, entropia angular e conectividade.
-- `od-efficiency`: amostra múltiplos pares origem-destino e mede distância, hops,
-  circuity, eficiência e acessibilidade como distribuição estatística.
-- `city-similarity`: transforma métricas consolidadas em vetores por cidade e calcula
-  distância, similaridade cosseno, PCA e agrupamento hierárquico.
-- `subcenters`: detecta subcentros topológicos por células espaciais e calcula índice de
-  policentralidade.
-- `urban-barriers`: infere barreiras urbanas prováveis a partir de baixa permeabilidade
-  espacial, conexões vizinhas ausentes, travessias longas, pontes estruturais e fronteiras
-  de comunidades.
-- `network-scale-profile`: recalcula métricas espaciais em múltiplas escalas de grade e mede
-  a estabilidade das conclusões locais.
+- Ataques aleatórios usam, por padrão, 30 sementes distintas e bootstrap de 95%.
+- A semente do ataque é separada da semente usada para estimar eficiência.
+- Desvio e intervalo de confiança ficam vazios quando há uma única execução; zero nunca significa
+  “incerteza inexistente”.
+- A síntese de robustez falha se faltar alguma modalidade/estratégia, salvo liberação explícita
+  com `--allow-incomplete`.
+- `--output-dir` isola também os resumos por cidade, evitando regravar resultados canônicos.
+- Centralidade de arestas possui arquivo completo; rankings truncados não podem alimentar índices
+  de vulnerabilidade ou gargalos.
+- O inventário separa extensão dirigida de roteamento da extensão física colapsada usada como
+  proxy de densidade viária.
+- A similaridade entre cidades usa um conjunto teórico reduzido e exige ao menos oito datasets;
+  uma amostra menor requer `--allow-small-sample-exploration` e permanece descritiva.
+- Cada comando grava uma linha de proveniência com argumentos efetivos, versões, Git, hashes de
+  entradas e artefatos em `outputs/experiments/cli_runs.jsonl` e no log do dataset.
+- O tipo de rede (`drive`, `walk`, `bike`, `all` etc.) é inferido do metadado e propagado pelos
+  módulos; caminhos de arquivo não pressupõem mais `drive` silenciosamente.
 
-As estratégias disponíveis são `random`, `targeted` e `targeted_adaptive`. Para comparações
-científicas, mantenha os mesmos parâmetros entre datasets e trate a estratégia aleatória como
-um baseline que deve futuramente ser repetido com múltiplas sementes.
+## Como interpretar módulos exploratórios
 
-## Saídas
+- `route-redundancy` bloqueia todos os arcos direcionados da melhor rota; é um cenário estrito de
+  alternativa disjunta, não uma simulação probabilística de incidente.
+- `spatial-robustness` representa bloqueios regionais estilizados, sem hazard ou probabilidade
+  observada. A amostra de eficiência é aleatória e independente do impacto na LCC.
+- `urban-morphology` gera classes heurísticas de orientação/conectividade.
+- `subcenters` detecta células candidatas de alta centralidade topológica; não observa empregos,
+  população, atividades ou fluxos e não comprova policentralidade urbana.
+- `network-scale-profile` mede sensibilidade descritiva à grade, não robustez espacial.
+- correlações com `maxspeed`, `lanes` e `surface` são associações com tags OSM e dependem de sua
+  cobertura; não constituem validação funcional externa.
 
-Cada dataset gera artefatos em `outputs/<dataset>/`:
+## Saídas e confiança
 
-- `metrics/`: CSVs com métricas, curvas e resumos;
-- `figures/`: gráficos estáticos;
-- `maps/`: mapas interativos;
-- `logs/`: relatórios metodológicos;
-- `dashboard_<dataset>.html`: painel consolidado;
-- `REPORT_<dataset>.md`: relatório consolidado.
-- `EXPERIMENT_MANIFEST_<dataset>.json`: manifesto de reprodutibilidade com ambiente,
-  versões, Git e artefatos.
+Cada dataset usa `outputs/<dataset>/metrics`, `figures`, `maps` e `logs`, além do dashboard,
+relatório e manifesto. O manifesto v2 inclui hashes SHA-256 das entradas/saídas existentes,
+ambiente, comando real, estado do Git e últimas execuções registradas.
 
-## Aderência ao plano da IC
+Um arquivo presente não é automaticamente um resultado válido. Antes de interpretar comparações:
 
-A análise de cobertura atual, lacunas metodológicas e prioridades está em
-[docs/analise_lacunas_projeto_ic.md](docs/analise_lacunas_projeto_ic.md).
+1. confirme integridade e frescor dos artefatos;
+2. execute a auditoria científica de comparabilidade;
+3. exija a matriz completa de curvas;
+4. confira cobertura e incerteza;
+5. trate outputs antigos, sem proveniência v2, como legado a regenerar.
 
-Para a etapa atual, focada somente no sistema que gera dados para análise posterior, use a
-revisão computacional em
-[docs/lacunas_computacionais_escopo_ic.md](docs/lacunas_computacionais_escopo_ic.md).
+`artifact-integrity` e `comparison-audit` retornam código de processo diferente de zero quando o
+gate não libera os dados. Auditorias com `--stages` explícitas usam arquivos sufixados pelo escopo
+e um `PASS` certifica somente essas etapas; não substituem a auditoria completa. Hashes declarados
+são verificados sem limite de tamanho por padrão.
 
-O protocolo para comparações científicas e as configurações por limites administrativos estão
-em [docs/protocolo_comparacao_cidades.md](docs/protocolo_comparacao_cidades.md) e
-`config/comparable/`.
+Dados e mapas derivados de OpenStreetMap devem atribuir **© OpenStreetMap contributors** e indicar
+a licença ODbL: <https://www.openstreetmap.org/copyright>.
 
-O protocolo específico para análise histórica com OSM está em
-[docs/protocolo_analise_historica_osm.md](docs/protocolo_analise_historica_osm.md).
+## Documentação científica
+
+- [documentação formal para o orientador](docs/documentacao_aprimoramentos_para_orientador.md);
+- [roteiro falado para apresentação](docs/roteiro_falado_apresentacao_orientador.md);
+- [matriz literal de aderência ao plano](docs/matriz_aderencia_plano_trabalho.md);
+- [revisão bibliográfica](docs/revisao_bibliografica_projeto_ic.md);
+- [matriz de aderência e lacunas](docs/analise_lacunas_projeto_ic.md);
+- [protocolo de comparação](docs/protocolo_comparacao_cidades.md);
+- [protocolo histórico OSM](docs/protocolo_analise_historica_osm.md);
+- [registro desta grande revisão](docs/registro_aprimoramentos_2026-08-18.md);
+- [dicionário de dados](docs/dicionario_dados.md).
+
+O PDF-base [`_Projeto_2026__Lucas_Soares.pdf`](_Projeto_2026__Lucas_Soares.pdf) foi anexado e
+conferido integral e visualmente em 18 de agosto de 2026. A matriz de aderência acima registra o
+vínculo literal entre objetivos, atividades, resultados esperados, implementação e lacunas.

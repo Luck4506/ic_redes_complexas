@@ -11,7 +11,7 @@ from typing import List, Optional, Tuple
 import folium
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 
 
 # =========================
@@ -102,7 +102,7 @@ def gerar_rota_distancia(
     ensure_city_dirs(city_id)
     random.seed(seed)
 
-    caminho_grafo = f"data/graphs/{city_id}_drive_clean.graphml"
+    caminho_grafo = str(dataset_graph_path(city_id, "clean"))
     G = load_graphml(caminho_grafo)
 
     # 1) Escolher origem/destino

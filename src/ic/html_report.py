@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .graph_inventory import gerar_planilha_grafo
+from .io_utils import dataset_metadata_path
 
 
 def _read_csv_dicts(path: str) -> list[dict[str, str]]:
@@ -189,7 +190,7 @@ def gerar_dashboard_html(city_id: str) -> dict:
     summary_rows = _read_csv_dicts(inventory["summary_csv"])
     summary = _summary_map(summary_rows)
 
-    meta = _read_json(f"data/metadata/{city_id}_drive_raw.json")
+    meta = _read_json(str(dataset_metadata_path(city_id, "raw")))
     highway_rows = _read_csv_dicts(f"{metrics_dir}/graph_inventory_highway.csv")
     surface_rows = _read_csv_dicts(f"{metrics_dir}/graph_inventory_surface.csv")
     maxspeed_rows = _read_csv_dicts(f"{metrics_dir}/graph_inventory_maxspeed.csv")
@@ -214,6 +215,7 @@ def gerar_dashboard_html(city_id: str) -> dict:
     comm_res_target_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_targeted.csv")
     comm_res_target_adaptive_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_targeted_adaptive.csv")
     comm_res_random_rows = _read_csv_dicts(f"{metrics_dir}/community_resilience_curve_random.csv")
+    robustness_summary_rows = _read_csv_dicts(f"{metrics_dir}/robustness_summary.csv")
     intra_comm_target_rows = _read_csv_dicts(f"{metrics_dir}/intra_community_resilience_summary_targeted.csv")
     intra_comm_target_adaptive_rows = _read_csv_dicts(
         f"{metrics_dir}/intra_community_resilience_summary_targeted_adaptive.csv"
@@ -287,7 +289,7 @@ def gerar_dashboard_html(city_id: str) -> dict:
       <h2>Guia de Leitura</h2>
       <p><strong>Topologia:</strong> descreve a estrutura das conexoes. <strong>Funcao:</strong> usa atributos OSM das vias e apresenta associacoes descritivas, nao causalidade.</p>
       <p><strong>Aproximacoes:</strong> closeness, betweenness, caminhos, diametro e eficiencia podem usar amostragem. Consulte a tabela de validacao antes de interpretar diferencas pequenas.</p>
-      <p><strong>Resiliencia:</strong> remocao de arestas e remocao de vertices sao experimentos separados. Na remocao de vertices, os nos retirados contam como desconectados e as fontes amostradas permanecem fixas durante a curva.</p>
+      <p><strong>Robustez estrutural:</strong> remocao de arestas e remocao de vertices sao experimentos separados. Eles medem degradacao sob remocao, nao recuperacao temporal. Na remocao de vertices, os nos retirados contam como desconectados e as fontes amostradas permanecem fixas durante a curva.</p>
       <p><strong>Comparacoes:</strong> cidades com recortes, datas ou cobertura experimental diferentes devem ser tratadas como comparacoes exploratorias.</p>
     </section>
     """
@@ -308,21 +310,22 @@ def gerar_dashboard_html(city_id: str) -> dict:
         _table("Topologia x Caracteristicas Funcionais - Grupos", functional_groups_rows),
         _table("Topologia x Caracteristicas Funcionais - Correlacoes", functional_correlations_rows),
         _table("Validacao das Aproximacoes", approximation_validation_rows),
-        _table("Resiliencia - Remocao Dirigida", res_target_rows),
-        _table("Resiliencia - Remocao Dirigida Adaptativa", res_target_adaptive_rows),
-        _table("Resiliencia - Remocao Aleatoria", res_random_rows),
-        _table("Resiliencia por Vertices - Dirigida", node_res_target_rows),
-        _table("Resiliencia por Vertices - Dirigida Adaptativa", node_res_target_adaptive_rows),
-        _table("Resiliencia por Vertices - Aleatoria", node_res_random_rows),
+        _table("Robustez estrutural - Remocao Dirigida", res_target_rows),
+        _table("Robustez estrutural - Remocao Dirigida Adaptativa", res_target_adaptive_rows),
+        _table("Robustez estrutural - Remocao Aleatoria", res_random_rows),
+        _table("Robustez por Vertices - Dirigida", node_res_target_rows),
+        _table("Robustez por Vertices - Dirigida Adaptativa", node_res_target_adaptive_rows),
+        _table("Robustez por Vertices - Aleatoria", node_res_random_rows),
         _table("Vertices Criticos Removidos - Dirigida", node_res_removed_target_rows),
-        _table("Resiliencia por Comunidades - Resumo", comm_res_summary_rows),
-        _table("Resiliencia por Comunidades - Conexoes Criticas", comm_res_top_edges_rows),
-        _table("Resiliencia por Comunidades - Dirigida", comm_res_target_rows),
-        _table("Resiliencia por Comunidades - Dirigida Adaptativa", comm_res_target_adaptive_rows),
-        _table("Resiliencia por Comunidades - Aleatoria", comm_res_random_rows),
-        _table("Resiliencia Interna por Comunidade - Dirigida", intra_comm_target_rows),
-        _table("Resiliencia Interna por Comunidade - Dirigida Adaptativa", intra_comm_target_adaptive_rows),
-        _table("Resiliencia Interna por Comunidade - Aleatoria", intra_comm_random_rows),
+        _table("Robustez por Comunidades - Resumo", comm_res_summary_rows),
+        _table("Robustez por Comunidades - Conexoes Criticas", comm_res_top_edges_rows),
+        _table("Robustez por Comunidades - Dirigida", comm_res_target_rows),
+        _table("Robustez por Comunidades - Dirigida Adaptativa", comm_res_target_adaptive_rows),
+        _table("Robustez por Comunidades - Aleatoria", comm_res_random_rows),
+        _table("Sintese Quantitativa da Robustez - AUC, Perdas e Limiares", robustness_summary_rows, limit=50),
+        _table("Robustez Interna por Comunidade - Dirigida", intra_comm_target_rows),
+        _table("Robustez Interna por Comunidade - Dirigida Adaptativa", intra_comm_target_adaptive_rows),
+        _table("Robustez Interna por Comunidade - Aleatoria", intra_comm_random_rows),
         _table("Indice de Vulnerabilidade - Nos", vulnerability_nodes_rows),
         _table("Indice de Vulnerabilidade - Arestas", vulnerability_edges_rows),
         _table("Gargalos Estruturais - Articulacoes", structural_articulations_rows),
@@ -340,8 +343,8 @@ def gerar_dashboard_html(city_id: str) -> dict:
         _table("Planejamento Urbano x Rede - Celulas", urban_morphology_cells_rows),
         _table("Eficiencia OD - Resumo Estatistico", od_efficiency_summary_rows),
         _table("Eficiencia OD - Pares com Maior Desvio", od_efficiency_pairs_rows),
-        _table("Subcentros e Policentralidade - Resumo", subcenters_summary_rows),
-        _table("Subcentros Detectados", subcenters_rows),
+        _table("Candidatos de Alta Centralidade - Resumo Exploratório", subcenters_summary_rows),
+        _table("Células Candidatas Selecionadas", subcenters_rows),
         _table("Ranking de Centralidade por Regiao", subcenters_cells_rows),
         _table("Barreiras Urbanas - Resumo", urban_barriers_summary_rows),
         _table("Barreiras Urbanas - Celulas com Baixa Permeabilidade", urban_barriers_cells_rows),
@@ -353,20 +356,22 @@ def gerar_dashboard_html(city_id: str) -> dict:
         _image_panel("Distribuicao de Graus", f"{figures_dir}/degree_distribution_loglog.png", outputs_root),
         _image_panel("Perfil de Escala - Metricas", f"{figures_dir}/network_scale_profile_metrics.png", outputs_root),
         _image_panel("Perfil de Escala - Estabilidade", f"{figures_dir}/network_scale_profile_stability.png", outputs_root),
-        _image_panel("Resiliencia - Dirigida", f"{figures_dir}/resilience_curve_targeted.png", outputs_root),
-        _image_panel("Resiliencia - Dirigida Adaptativa", f"{figures_dir}/resilience_curve_targeted_adaptive.png", outputs_root),
-        _image_panel("Resiliencia - Aleatoria", f"{figures_dir}/resilience_curve_random.png", outputs_root),
-        _image_panel("Resiliencia - Aleatoria Agregada", f"{figures_dir}/resilience_random_aggregate.png", outputs_root),
-        _image_panel("Resiliencia por Vertices - Dirigida", f"{figures_dir}/node_resilience_curve_targeted.png", outputs_root),
-        _image_panel("Resiliencia por Vertices - Dirigida Adaptativa", f"{figures_dir}/node_resilience_curve_targeted_adaptive.png", outputs_root),
-        _image_panel("Resiliencia por Vertices - Aleatoria", f"{figures_dir}/node_resilience_curve_random.png", outputs_root),
-        _image_panel("Resiliencia por Vertices - Aleatoria Agregada", f"{figures_dir}/node_resilience_random_aggregate.png", outputs_root),
-        _image_panel("Resiliencia por Comunidades - Dirigida", f"{figures_dir}/community_resilience_curve_targeted.png", outputs_root),
-        _image_panel("Resiliencia por Comunidades - Dirigida Adaptativa", f"{figures_dir}/community_resilience_curve_targeted_adaptive.png", outputs_root),
-        _image_panel("Resiliencia por Comunidades - Aleatoria", f"{figures_dir}/community_resilience_curve_random.png", outputs_root),
-        _image_panel("Resiliencia Interna por Comunidade - Dirigida", f"{figures_dir}/intra_community_resilience_targeted.png", outputs_root),
-        _image_panel("Resiliencia Interna por Comunidade - Dirigida Adaptativa", f"{figures_dir}/intra_community_resilience_targeted_adaptive.png", outputs_root),
-        _image_panel("Resiliencia Interna por Comunidade - Aleatoria", f"{figures_dir}/intra_community_resilience_random.png", outputs_root),
+        _image_panel("Robustez Estrutural - Dirigida", f"{figures_dir}/resilience_curve_targeted.png", outputs_root),
+        _image_panel("Robustez Estrutural - Dirigida Adaptativa", f"{figures_dir}/resilience_curve_targeted_adaptive.png", outputs_root),
+        _image_panel("Robustez Estrutural - Aleatoria", f"{figures_dir}/resilience_curve_random.png", outputs_root),
+        _image_panel("Robustez Estrutural - Aleatoria Agregada", f"{figures_dir}/resilience_random_aggregate.png", outputs_root),
+        _image_panel("Robustez por Vertices - Dirigida", f"{figures_dir}/node_resilience_curve_targeted.png", outputs_root),
+        _image_panel("Robustez por Vertices - Dirigida Adaptativa", f"{figures_dir}/node_resilience_curve_targeted_adaptive.png", outputs_root),
+        _image_panel("Robustez por Vertices - Aleatoria", f"{figures_dir}/node_resilience_curve_random.png", outputs_root),
+        _image_panel("Robustez por Vertices - Aleatoria Agregada", f"{figures_dir}/node_resilience_random_aggregate.png", outputs_root),
+        _image_panel("Robustez entre Comunidades - Dirigida", f"{figures_dir}/community_resilience_curve_targeted.png", outputs_root),
+        _image_panel("Robustez entre Comunidades - Dirigida Adaptativa", f"{figures_dir}/community_resilience_curve_targeted_adaptive.png", outputs_root),
+        _image_panel("Robustez entre Comunidades - Aleatoria", f"{figures_dir}/community_resilience_curve_random.png", outputs_root),
+        _image_panel("Robustez Interna por Comunidade - Dirigida", f"{figures_dir}/intra_community_resilience_targeted.png", outputs_root),
+        _image_panel("Robustez Interna por Comunidade - Dirigida Adaptativa", f"{figures_dir}/intra_community_resilience_targeted_adaptive.png", outputs_root),
+        _image_panel("Robustez Interna por Comunidade - Aleatoria", f"{figures_dir}/intra_community_resilience_random.png", outputs_root),
+        _image_panel("Sintese Quantitativa da Robustez - AUC", f"{figures_dir}/robustness_summary_auc.png", outputs_root),
+        _image_panel("Sintese Quantitativa da Robustez - Perdas", f"{figures_dir}/robustness_summary_losses.png", outputs_root),
         _image_panel("Grafo - Ruas", f"{figures_dir}/grafo_{city_id}_clean_ruas.png", outputs_root),
         _image_panel("Grafo - Ruas e Nos", f"{figures_dir}/grafo_{city_id}_clean_ruas_nos.png", outputs_root),
         _image_panel("Grafo - Comunidades", f"{figures_dir}/grafo_{city_id}_clean_comunidades.png", outputs_root),
@@ -390,7 +395,7 @@ def gerar_dashboard_html(city_id: str) -> dict:
         _iframe_panel("Mapa Morfologico - Entropia Angular", f"{maps_dir}/urban_morphology_orientation_entropy.html", outputs_root),
         _iframe_panel("Mapa Morfologico - Conectividade", f"{maps_dir}/urban_morphology_connectivity.html", outputs_root),
         _iframe_panel("Mapa Eficiencia OD - Rotas com Maior Desvio", f"{maps_dir}/od_efficiency_routes.html", outputs_root),
-        _iframe_panel("Mapa de Subcentros e Policentralidade", f"{maps_dir}/subcenters.html", outputs_root),
+        _iframe_panel("Mapa de Candidatos de Alta Centralidade", f"{maps_dir}/subcenters.html", outputs_root),
         _iframe_panel("Mapa de Barreiras Urbanas - Permeabilidade", f"{maps_dir}/urban_barriers_permeability.html", outputs_root),
         _iframe_panel("Mapa de Barreiras Urbanas - Conexoes", f"{maps_dir}/urban_barriers_connections.html", outputs_root),
         _iframe_panel("Mapa Perfil de Escala - Baixa Permeabilidade", f"{maps_dir}/network_scale_profile_low_permeability.html", outputs_root),

@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ic-redes-complexas"
 version = "0.1.0"
-description = "IC - Redes Complexas na Rede Viária"
-requires-python = ">=3.10"
+description = "Análise reprodutível da estrutura e robustez de redes viárias urbanas"
+requires-python = ">=3.11"
 dependencies = [
   "osmnx>=2.0.0",
   "networkx>=3.0",

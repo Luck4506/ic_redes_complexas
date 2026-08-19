@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import osmnx as ox
 import pandas as pd
 
+from .io_utils import dataset_graph_path
+
 
 def _ensure_fig_dir(city_id: str) -> Path:
     out_dir = Path(f"outputs/{city_id}/figures")
@@ -64,15 +66,15 @@ def plotar_grafos_png(city_id: str, which: str = "clean") -> dict:
       3) ruas coloridas por comunidade (E6)
 
     which:
-      - 'raw'   -> data/graphs/<city>_drive_raw.graphml
-      - 'clean' -> data/graphs/<city>_drive_clean.graphml
+      - 'raw'   -> data/graphs/<city>_<network_type>_raw.graphml
+      - 'clean' -> data/graphs/<city>_<network_type>_clean.graphml
     """
     if which not in {"raw", "clean"}:
         raise ValueError("which deve ser 'raw' ou 'clean'.")
 
     out_dir = _ensure_fig_dir(city_id)
 
-    graph_path = f"data/graphs/{city_id}_drive_{which}.graphml"
+    graph_path = str(dataset_graph_path(city_id, which))
     G = ox.load_graphml(graph_path)
 
     # 1) RUAS APENAS

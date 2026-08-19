@@ -1,17 +1,43 @@
 ## Resumo Para Apresentar ao Professor
 
+> **Nota de auditoria — 18/08/2026:** este arquivo preserva a memória cronológica do trabalho,
+> mas algumas formulações antigas eram mais fortes que a evidência. Para a interpretação atual,
+> “resiliência” significa apenas **robustez estrutural sob remoção**, os quatro municípios são
+> estudos de caso paulistas e a comparabilidade científica permanece `nao_comprovada` até que
+> snapshot OSM, hashes, parâmetros e integridade sejam verificados pelo protocolo atual.
+
 O projeto foi revisado com base no plano original da iniciação científica. Foram identificadas lacunas metodológicas e implementadas melhorias para aproximar o repositório do escopo previsto.
 
-### 1. Resiliência das comunidades
+### Atualização consolidada — 21 de junho de 2026
 
-Além da resiliência do grafo completo, foram implementadas duas análises:
+**Situação computacional em 21/06/2026:** havia ampla cobertura funcional. A auditoria posterior
+identificou bugs de contrato, proveniência insuficiente e outputs misturados; portanto os artefatos
+legados precisam ser validados/regenerados antes da análise final. As expansões de vulnerabilidade,
+gargalos, rotas, análises espaciais, hierarquia, morfologia, similaridade, subcentros, barreiras e
+escala existem, mas várias são proxies exploratórias.
 
-- **Resiliência entre comunidades:** avalia o impacto da remoção das conexões que ligam diferentes comunidades.
-- **Resiliência interna das comunidades:** avalia individualmente quanto cada comunidade resiste à remoção de suas próprias vias.
+**Situação científica:** ainda em andamento. As próximas entregas são formular perguntas e
+hipóteses, interpretar os resultados comparativos, documentar as escolhas metodológicas,
+organizar o estado da arte e produzir os textos acadêmicos.
+
+**Melhorias de engenharia auditadas em 18/08/2026:** proveniência estruturada, dicionário de
+dados, detecção de saídas desatualizadas e testes de contrato passaram a ser requisitos de
+liberação, não detalhes não bloqueantes. Um orquestrador único de toda a pipeline continua como
+evolução futura.
+
+As listas antigas de pendências neste arquivo são mantidas como histórico. Quando uma seção
+posterior informa que uma pendência foi tratada, vale o estado consolidado acima.
+
+### 1. Robustez estrutural das comunidades
+
+Além da robustez do grafo completo, foram implementadas duas análises:
+
+- **Robustez entre comunidades:** avalia o impacto da remoção das conexões que ligam diferentes comunidades.
+- **Robustez interna das comunidades:** avalia individualmente quanto cada comunidade resiste à remoção de suas próprias vias.
 
 Essas análises permitem identificar comunidades frágeis e conexões críticas para a integração da rede.
 
-### 1.1 Resiliência por remoção de vértices
+### 1.1 Robustez estrutural por remoção de vértices
 
 Foi implementada uma nova análise que remove exclusivamente vértices da rede, sem substituir
 ou combinar a análise existente por remoção de arestas.
@@ -63,7 +89,10 @@ Também foram adicionadas métricas normalizadas por área, como:
 - arestas por km²;
 - extensão viária por km².
 
-Uma auditoria automática confirmou que os novos datasets são comparáveis.
+Uma auditoria automática legada verificou apenas condições superficiais. A revisão de
+18/08/2026 mostrou que ela não confirma comparabilidade científica; o estado correto é
+`nao_comprovada` até que snapshot OSM, geometria do limite, hashes, parâmetros, sementes e
+frescor sejam auditados.
 
 ### 4. Validação das aproximações
 
@@ -165,7 +194,8 @@ As principais etapas acadêmicas ainda pendentes são:
 Depois de separar o que é software do que é escrita acadêmica, as lacunas computacionais
 identificadas foram fechadas.
 
-Foram executadas as análises de comunidades nos quatro datasets administrativos comparáveis:
+Foram executadas as análises de comunidades nos quatro datasets administrativos avaliados; a
+comparabilidade científica atual permanece não comprovada:
 
 - Campinas administrativa;
 - Jundiaí administrativa;
@@ -268,15 +298,16 @@ indicavam ausência da etapa `paths`. Isso foi corrigido executando a geração 
 Depois disso, inventários, dashboards, relatórios e comparação foram regenerados. A busca por
 avisos de arquivo ausente nos dashboards, relatórios e inventários não retornou problemas.
 
-Resultado da validação final:
+Registro da validação daquela etapa — **não representa o gate atual**:
 
 - 14 testes passaram;
 - compilação concluída sem erro;
 - `git diff --check` sem problemas;
-- todos os artefatos principais dos datasets administrativos existem e não estão vazios.
+- naquela verificação, os artefatos esperados existiam e não estavam vazios.
 
-Conclusão: a base computacional atual está pronta para servir como ponto de partida para um
-novo escopo de expansão.
+Existência e tamanho não provam integridade, frescor ou comparabilidade. A auditoria completa de
+18/08/2026 bloqueia os quatro datasets legados; consulte
+`docs/registro_aprimoramentos_2026-08-18.md` para o estado vigente.
 
 ### 10. Expansão: Índice Composto de Vulnerabilidade Viária
 
@@ -287,8 +318,9 @@ Motivação:
 
 - o projeto já calculava várias métricas separadas de criticidade;
 - para a análise posterior, é útil ter um ranking único que combine diferentes sinais;
-- isso continua alinhado ao PDF, pois aprofunda centralidade, resiliência, vulnerabilidade e
-  identificação de pontos críticos da rede viária.
+- isso é coerente com os objetivos confirmados no PDF de centralidade, robustez estrutural e
+  identificação de pontos críticos; a matriz literal está em
+  `docs/matriz_aderencia_plano_trabalho.md`.
 
 Foi criado o comando:
 
@@ -545,7 +577,8 @@ Motivação:
 
 - eventos reais raramente removem vias espalhadas aleatoriamente;
 - enchentes, obras, acidentes e bloqueios costumam afetar uma região específica;
-- a análise aproxima os experimentos de resiliência de cenários urbanos mais realistas.
+- a análise cria cenários regionais estilizados; sem hazard, probabilidade ou observações
+  externas, eles não devem ser chamados de mais realistas.
 
 Foi criado o comando:
 
@@ -562,7 +595,7 @@ Como a análise funciona:
 5. as células são ranqueadas pelo dano causado.
 
 O modo padrão `incident` remove arestas que tocam nós da célula. Isso representa um bloqueio
-regional mais realista, porque uma ocorrência local pode afetar vias internas e acessos à
+regional estilizado, porque uma ocorrência local pode afetar vias internas e acessos à
 região. Também existe o modo `internal`, que remove apenas arestas totalmente internas à
 célula.
 
@@ -669,15 +702,15 @@ da classe mais crítica.
 
 ### 16. Expansão: Comparação Planejamento Urbano x Estrutura da Rede
 
-Foi implementada uma análise de morfologia urbana para aproximar padrões de planejamento a
-partir da estrutura local do grafo viário.
+Foi implementado um perfil heurístico de orientação e conectividade a partir da estrutura
+local do grafo viário. Ele não identifica regimes de planejamento sem validação externa.
 
 Motivação:
 
 - conectar teoria de grafos com morfologia urbana;
 - identificar regiões mais gradeadas, radiais/lineares, orgânicas, fragmentadas ou mistas;
 - revelar diferenças internas da cidade que métricas globais não mostram;
-- permitir discutir padrões universais e especificidades locais da malha viária.
+- gerar hipóteses sobre diferenças locais da malha viária, sem alegar universalidade.
 
 Foi criado o comando:
 
@@ -738,8 +771,8 @@ uma rota pontual.
 Motivação:
 
 - a rota única ajuda a demonstrar o funcionamento do sistema, mas não representa a cidade;
-- centenas ou milhares de pares origem-destino permitem estimar a distribuição real de
-  acessibilidade;
+- centenas ou milhares de pares origem-destino uniformemente amostrados entre nós estimam a
+  distribuição induzida por esse desenho amostral, não a distribuição real de acessibilidade;
 - a comparação entre cidades fica mais robusta quando usa médias, medianas, percentis e
   taxas, não apenas um exemplo;
 - a análise conversa diretamente com eficiência, acessibilidade e estrutura da rede viária.
@@ -794,20 +827,21 @@ se comporta em muitos deslocamentos possíveis.
 
 ### 18. Expansão: Similaridade Entre Cidades
 
-Foi implementada uma análise para transformar as métricas consolidadas de cada cidade em
-vetores numéricos comparáveis.
+Foi implementada uma análise exploratória para transformar um conjunto teórico reduzido de
+métricas de cada cidade em vetores numéricos.
 
 Motivação:
 
-- fortalecer a discussão sobre padrões universais e especificidades locais;
-- responder quais cidades são estruturalmente mais parecidas;
+- gerar hipóteses sobre recorrências e especificidades locais;
+- explorar quais cidades parecem próximas sob escolhas explícitas de métricas e escala;
 - reduzir dezenas de métricas a uma leitura comparativa mais sintética;
 - criar uma base quantitativa para agrupamento, PCA e interpretação multivariada.
 
 Foi criado o comando:
 
 ```bash
-ic city-similarity <dataset_1> <dataset_2> <dataset_3> --output-dir outputs/comparisons --min-coverage 1.0
+ic city-similarity <dataset_1> <dataset_2> <dataset_3> --output-dir outputs/comparisons \
+  --min-coverage 1.0 --allow-small-sample-exploration
 ```
 
 A análise faz o seguinte:
@@ -848,23 +882,23 @@ O HTML gerado reúne:
 - tabela da cidade mais parecida para cada dataset;
 - coordenadas PCA.
 
-Essa análise é importante porque permite interpretar a comparação de cidades como um problema
-multivariado. Em vez de observar métrica por métrica separadamente, o sistema calcula a
-proximidade estrutural geral entre redes viárias, ajudando a identificar grupos de cidades
-com padrões parecidos e casos mais específicos.
+Essa análise é uma visualização multivariada exploratória. Em amostra suficiente, pode ajudar a
+comparar perfis sob escolhas explícitas de métricas e escala. Com poucos casos, PCA, clustering e
+“cidade mais próxima” são instáveis e não estabelecem uma proximidade estrutural geral; por isso,
+o comando exige oito datasets por padrão e uma liberação explícita abaixo desse limite.
 
-### 19. Expansão: Detecção de Subcentros e Centralidade Policêntrica
+### 19. Expansão: Células Candidatas de Alta Centralidade Topológica
 
-Foi implementada uma análise para medir se a cidade depende de um único centro topológico ou
-se distribui sua importância estrutural entre vários núcleos.
+Foi implementada uma análise exploratória para medir se a importância topológica se concentra em
+uma única célula ou se fica distribuída entre várias células candidatas.
 
 Motivação:
 
 - duas cidades podem ter métricas globais parecidas, mas estruturas internas diferentes;
-- uma rede monocêntrica tende a concentrar centralidade em poucas regiões;
-- uma rede policêntrica tende a distribuir centralidade e acessibilidade por vários núcleos;
-- a análise conversa diretamente com morfologia urbana, planejamento urbano e padrões locais
-  da rede viária.
+- redes podem concentrar ou dispersar centralidade entre regiões;
+- a análise gera hipóteses para estudos de morfologia e padrões locais da rede;
+- sem empregos, população, atividades ou fluxos, ela não identifica centros urbanos nem
+  comprova policentricidade.
 
 Foi criado o comando:
 
@@ -887,11 +921,11 @@ A análise divide a cidade em células espaciais e calcula, para cada célula:
 - quantidade de comunidades tocadas;
 - comunidade dominante;
 - participação da comunidade dominante;
-- score de subcentro;
+- score de candidatura topológica;
 - ranking regional de centralidade;
-- indicação se a célula foi classificada como subcentro.
+- indicação se a célula foi selecionada como candidata.
 
-O score de subcentro combina:
+O score de candidatura combina:
 
 - centralidade acumulada na região;
 - presença de nós muito centrais;
@@ -902,20 +936,20 @@ O score de subcentro combina:
 - tamanho da região em nós;
 - diversidade de comunidades tocadas.
 
-As células elegíveis com score acima do percentil configurado são classificadas como
-subcentros. Com `--percentile 0.90`, o sistema seleciona aproximadamente o topo de 10% das
-regiões elegíveis.
+As células elegíveis com score acima do percentil configurado são selecionadas como candidatas
+topológicas. Com `--percentile 0.90`, o sistema seleciona aproximadamente o topo de 10% das
+regiões elegíveis, sem validá-las como subcentros urbanos.
 
 O resumo agregado registra:
 
-- quantidade de subcentros detectados;
-- fração de células povoadas classificadas como subcentros;
-- índice de policentralidade;
-- índice de monocentralidade;
-- entropia dos scores dos subcentros;
-- participação do principal subcentro;
-- célula do principal subcentro;
-- score do principal subcentro.
+- quantidade de células candidatas;
+- fração de células povoadas selecionadas;
+- índice exploratório de dispersão;
+- índice exploratório de dominância;
+- entropia dos scores das candidatas;
+- participação da principal candidata;
+- célula candidata principal;
+- maior score de candidatura.
 
 Arquivos gerados por dataset:
 
@@ -925,15 +959,12 @@ Arquivos gerados por dataset:
 - `maps/subcenters.html`;
 - `logs/subcenters_report.txt`.
 
-Os dashboards passaram a exibir resumo, ranking de subcentros, ranking de centralidade por
-região e mapa de subcentros. O relatório consolidado passou a ter uma seção própria chamada
-**Subcentros e centralidade policêntrica**. O comparador entre cidades passou a incluir
-quantidade de subcentros, fração de subcentros, índice de policentralidade, índice de
-monocentralidade, entropia dos subcentros e maior score de subcentro.
+Os dashboards passaram a exibir resumo, ranking de células candidatas, ranking de centralidade
+por região e mapa topológico. O relatório e o comparador preservam os nomes técnicos legados dos
+campos, mas os apresentam como medidas exploratórias de concentração e dispersão.
 
 Essa análise é importante porque transforma centralidade, comunidades e densidade local em uma
-leitura urbana: se a cidade depende de um centro dominante ou se possui vários núcleos com
-importância estrutural relevante.
+hipótese espacial testável. Qualquer interpretação como centro urbano exige validação externa.
 
 ### 20. Expansão: Exposição da Rede a Barreiras Urbanas
 
@@ -1102,11 +1133,70 @@ implementado no projeto em formato de notas de apresentação, com:
 - explicação técnica de cada dado;
 - importância de cada análise dentro do escopo da IC;
 - comandos necessários para reproduzir os artefatos.
+- caixa de controle para marcar o que já foi mostrado ao professor.
 
 O documento cobre desde a base do grafo, métricas estruturais, centralidades, comunidades,
 resiliência, validação, vulnerabilidade, gargalos, redundância de rotas, análise espacial,
 hierarquia viária, morfologia urbana, eficiência OD, similaridade entre cidades, subcentros,
 barreiras urbanas e perfil de escala, até auditoria histórica e relatório consolidado.
+Também inclui a rota mínima entre origem e destino e a exportação para Kepler.gl.
 
 Esse arquivo foi pensado para ser usado diretamente na conversa com o professor: a cada tema,
 há um artefato indicado para abrir e uma explicação pronta do que o dado significa.
+
+### 23. Síntese quantitativa das curvas de robustez
+
+Com base na revisão bibliográfica, foi implementada a primeira etapa de fortalecimento científico
+dos experimentos de robustez. Antes, as estratégias eram comparadas principalmente pelas curvas e
+pelo último ponto. Agora o sistema resume toda a trajetória de degradação em um intervalo comum.
+
+Foi criado o comando:
+
+```bash
+ic robustness-summary campinas_admin jundiai_admin sorocaba_admin valinhos_admin
+```
+
+O comando processa separadamente:
+
+- remoção de arestas do grafo viário;
+- remoção de vértices;
+- remoção de conexões entre comunidades.
+
+Para cada modalidade, estratégia e resposta, calcula:
+
+- área sob a curva normalizada (AUC);
+- valor e perda em 1%, 5%, 10% e 15% de remoção;
+- primeira fração que reduz a resposta abaixo de 90%, 75% e 50%;
+- média, desvio-padrão, mínimo e máximo da AUC quando existem repetições aleatórias;
+- maior fração de remoção realmente comum entre todas as cidades e estratégias comparadas.
+
+As respostas sintetizadas são:
+
+- fração da maior componente conectada;
+- eficiência topológica retida;
+- eficiência ponderada por distância retida;
+- no grafo de comunidades, também a maior componente em número de comunidades e ponderada pelos
+  nós urbanos representados.
+
+Arquivos gerados por dataset:
+
+- `metrics/robustness_summary.csv`;
+- `figures/robustness_summary_auc.png`;
+- `figures/robustness_summary_losses.png`;
+- `logs/robustness_summary_report.txt`.
+
+Arquivos comparativos:
+
+- `outputs/comparisons/robustness_comparison.csv`;
+- `outputs/comparisons/robustness_comparison.html`;
+- `outputs/comparisons/robustness_comparison.png`.
+- `outputs/comparisons/robustness_losses.png`.
+
+A AUC é integrada pelo método dos trapézios com interpolação linear. Uma AUC maior indica que a
+rede reteve, em média, uma parcela maior da resposta durante o intervalo. O sistema não mistura as
+modalidades: robustez a remoção de nós, arestas e conexões entre comunidades continua sendo
+interpretada separadamente.
+
+A síntese foi integrada ao inventário, ao dashboard, ao relatório consolidado, ao README, à lista
+de comandos e aos dois documentos de apresentação ao professor. Essa etapa permite comparar as
+cidades e estratégias por toda a curva, e não apenas por inspeção visual ou por um ponto final.

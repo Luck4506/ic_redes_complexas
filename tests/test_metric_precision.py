@@ -33,6 +33,7 @@ from ic.city_similarity import _cosine_similarity, _standardize_matrix
 from ic.subcenters import _polycentricity, _percentile as _subcenter_percentile
 from ic.urban_barriers import _is_cardinal_neighbor, _percentile as _barrier_percentile, _possible_neighbor_pairs
 from ic.network_scale_profile import _coefficient_variation, _stability_score
+from ic.robustness_summary import _normalized_auc as _summary_auc, _threshold_crossing, _value_at
 
 
 class MetricPrecisionTests(unittest.TestCase):
@@ -87,6 +88,25 @@ class MetricPrecisionTests(unittest.TestCase):
         ]
 
         self.assertAlmostEqual(_normalized_auc(records, "lcc_fraction"), 0.5)
+
+    def test_robustness_summary_interpolates_checkpoints(self) -> None:
+        points = [(0.0, 1.0), (0.1, 0.8), (0.2, 0.4)]
+
+        self.assertAlmostEqual(_value_at(points, 0.05), 0.9)
+        self.assertAlmostEqual(_value_at(points, 0.15), 0.6)
+
+    def test_robustness_summary_auc_uses_requested_common_interval(self) -> None:
+        points = [(0.0, 1.0), (0.1, 0.8), (0.2, 0.0)]
+
+        self.assertAlmostEqual(_summary_auc(points, 0.1), 0.9)
+        self.assertAlmostEqual(_summary_auc(points, 0.2), 0.65)
+
+    def test_robustness_summary_interpolates_threshold_crossing(self) -> None:
+        points = [(0.0, 1.0), (0.1, 0.8), (0.2, 0.4)]
+
+        self.assertAlmostEqual(_threshold_crossing(points, 0.9, 0.2), 0.05)
+        self.assertAlmostEqual(_threshold_crossing(points, 0.5, 0.2), 0.175)
+        self.assertIsNone(_threshold_crossing(points, 0.3, 0.2))
 
     def test_intra_community_simulation_stays_within_subgraph(self) -> None:
         G = nx.path_graph(5)

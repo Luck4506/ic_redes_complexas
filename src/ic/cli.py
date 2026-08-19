@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 
 from .download import download_from_config
 from .io_utils import dataset_id_for_year
@@ -21,7 +23,8 @@ from .html_report import gerar_dashboard_html
 from .compare_report import gerar_comparacao_html
 from .functional_relations import analisar_relacoes_funcionais
 from .approximation_validation import validar_aproximacoes
-from .comparison_protocol import auditar_comparabilidade
+from .scientific_comparability import CONFIRMED, auditar_comparabilidade_cientifica
+from .comparison_protocol import write_legacy_comparison_csv
 from .historical_quality import auditar_qualidade_historica
 from .random_resilience_stats import gerar_estatisticas_resiliencia_aleatoria
 from .vulnerability_index import calcular_indice_vulnerabilidade
@@ -36,6 +39,25 @@ from .city_similarity import analisar_similaridade_cidades
 from .subcenters import detectar_subcentros
 from .urban_barriers import analisar_barreiras_urbanas
 from .network_scale_profile import analisar_perfil_escala_rede
+from .robustness_summary import gerar_sintese_robustez
+from .representation_audit import analisar_representacoes
+from .provenance import CliRunRecorder, begin_cli_run
+from .artifact_integrity import (
+    DEFAULT_HASH_SIZE_LIMIT_BYTES,
+    STAGE_CONTRACTS,
+    auditar_integridade_artefatos,
+)
+
+
+class _ProvenanceArgumentParser(argparse.ArgumentParser):
+    """Preserve argparse's user-facing diagnostic on its original SystemExit."""
+
+    def error(self, message: str) -> None:
+        self.print_usage(sys.stderr)
+        self._print_message(f"{self.prog}: error: {message}\n", sys.stderr)
+        error = SystemExit(2)
+        error._ic_argparse_message = message  # type: ignore[attr-defined]
+        raise error
 
 
 def _add_year_argument(parser: argparse.ArgumentParser) -> None:
@@ -46,8 +68,8 @@ def _dataset_city(args: argparse.Namespace) -> str:
     return dataset_id_for_year(args.city, getattr(args, "year", None))
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(prog="ic", description="IC — Redes Complexas (CLI)")
+def _main(recorder: CliRunRecorder) -> None:
+    parser = _ProvenanceArgumentParser(prog="ic", description="IC — Redes Complexas (CLI)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     # --- Teste ---
@@ -100,8 +122,8 @@ def main() -> None:
     p_comm.add_argument("--min-size", type=int, default=30)
     p_comm.add_argument("--seed", type=int, default=42)
 
-    # --- Teste de resiliência ---
-    p_res = sub.add_parser("resilience", help="E7: teste de resiliência removendo arestas.")
+    # --- Teste de robustez estrutural (nome do comando preservado) ---
+    p_res = sub.add_parser("resilience", help="E7: robustez estrutural sob remoção de arestas.")
     p_res.add_argument("--city", required=True)
     _add_year_argument(p_res)
     p_res.add_argument("--strategy", choices=["random", "targeted", "targeted_adaptive"], default="targeted")
@@ -110,9 +132,15 @@ def main() -> None:
     p_res.add_argument("--k-edge", type=int, default=80)
     p_res.add_argument("--eff-samples", type=int, default=20)
     p_res.add_argument("--seed", type=int, default=42)
+    p_res.add_argument(
+        "--evaluation-seed",
+        type=int,
+        default=104729,
+        help="Semente independente usada apenas para estimar a eficiência.",
+    )
 
-    # --- Teste de resiliência por remoção exclusiva de vértices ---
-    p_node_res = sub.add_parser("node-resilience", help="E7V: teste de resiliência removendo apenas vértices.")
+    # --- Teste de robustez estrutural por remoção exclusiva de vértices ---
+    p_node_res = sub.add_parser("node-resilience", help="E7V: robustez estrutural sob remoção de vértices.")
     p_node_res.add_argument("--city", required=True)
     _add_year_argument(p_node_res)
     p_node_res.add_argument("--strategy", choices=["random", "targeted", "targeted_adaptive"], default="targeted")
@@ -121,9 +149,15 @@ def main() -> None:
     p_node_res.add_argument("--k-node", type=int, default=80)
     p_node_res.add_argument("--eff-samples", type=int, default=20)
     p_node_res.add_argument("--seed", type=int, default=42)
+    p_node_res.add_argument(
+        "--evaluation-seed",
+        type=int,
+        default=104729,
+        help="Semente independente usada apenas para estimar a eficiência.",
+    )
 
-    # --- Teste de resiliência no grafo agregado de comunidades ---
-    p_res_comm = sub.add_parser("community-resilience", help="E7C: resiliência entre comunidades detectadas.")
+    # --- Teste de robustez estrutural no grafo agregado de comunidades ---
+    p_res_comm = sub.add_parser("community-resilience", help="E7C: robustez estrutural entre comunidades detectadas.")
     p_res_comm.add_argument("--city", required=True)
     _add_year_argument(p_res_comm)
     p_res_comm.add_argument("--strategy", choices=["random", "targeted", "targeted_adaptive"], default="targeted")
@@ -132,10 +166,10 @@ def main() -> None:
     p_res_comm.add_argument("--min-size", type=int, default=30)
     p_res_comm.add_argument("--seed", type=int, default=42)
 
-    # --- Teste de resiliência dentro de cada comunidade ---
+    # --- Teste de robustez estrutural dentro de cada comunidade ---
     p_res_intra = sub.add_parser(
         "intra-community-resilience",
-        help="E7I: resiliência interna de cada comunidade detectada.",
+        help="E7I: robustez estrutural interna de cada comunidade detectada.",
     )
     p_res_intra.add_argument("--city", required=True)
     _add_year_argument(p_res_intra)
@@ -181,11 +215,18 @@ def main() -> None:
 
     p_similarity = sub.add_parser(
         "city-similarity",
-        help="Cria vetores de métricas por cidade e calcula distância, similaridade, PCA e clustering.",
+        help="Explora distâncias entre perfis urbanos com trava de amostra e conjunto teórico reduzido.",
     )
     p_similarity.add_argument("datasets", nargs="+", help="Ex.: campinas_admin jundiai_admin sorocaba_admin")
     p_similarity.add_argument("--output-dir", default="outputs/comparisons")
     p_similarity.add_argument("--min-coverage", type=float, default=1.0)
+    p_similarity.add_argument("--metric-profile", choices=["theory_core", "all"], default="theory_core")
+    p_similarity.add_argument("--minimum-datasets", type=int, default=8)
+    p_similarity.add_argument(
+        "--allow-small-sample-exploration",
+        action="store_true",
+        help="Libera explicitamente análises descritivas abaixo da amostra mínima.",
+    )
 
     p_functional = sub.add_parser("functional-relations", help="Relaciona atributos OSM e posição topológica.")
     p_functional.add_argument("--city", required=True)
@@ -199,9 +240,18 @@ def main() -> None:
     p_validate.add_argument("--repeats", type=int, default=3)
     p_validate.add_argument("--seed", type=int, default=42)
 
-    p_audit = sub.add_parser("comparison-audit", help="Audita se datasets podem ser comparados cientificamente.")
+    p_audit = sub.add_parser(
+        "comparison-audit",
+        help="Auditoria fail-closed de comparabilidade e proveniência.",
+    )
     p_audit.add_argument("datasets", nargs="+")
-    p_audit.add_argument("--output")
+    p_audit.add_argument("--output-dir", default="outputs/comparisons")
+    p_audit.add_argument(
+        "--output",
+        help="Alias legado: grava uma cópia do resumo por dataset neste CSV exato.",
+    )
+    p_audit.add_argument("--profile", choices=["cientifico", "exploratorio"], default="cientifico")
+    p_audit.add_argument("--snapshot-policy", choices=["same", "documented"], default="same")
 
     p_hist_audit = sub.add_parser("historical-audit", help="Audita viés de cobertura OSM em comparações temporais.")
     p_hist_audit.add_argument("--reference", required=True, help="Dataset de referência atual. Ex.: campinas")
@@ -215,7 +265,16 @@ def main() -> None:
     p_random_stats.add_argument("--city", required=True)
     _add_year_argument(p_random_stats)
     p_random_stats.add_argument("--mode", choices=["edge", "node", "both"], default="both")
-    p_random_stats.add_argument("--seeds", type=int, nargs="+", default=[42, 43, 44, 45, 46])
+    p_random_stats.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        help="Sementes explícitas de ataque. Se omitidas, são geradas 30 repetições.",
+    )
+    p_random_stats.add_argument("--repetitions", type=int)
+    p_random_stats.add_argument("--master-seed", type=int, default=42)
+    p_random_stats.add_argument("--evaluation-seed", type=int, default=104729)
+    p_random_stats.add_argument("--bootstrap-resamples", type=int, default=2000)
     p_random_stats.add_argument("--max-fraction", type=float, default=0.15)
     p_random_stats.add_argument("--steps", type=int, default=15)
     p_random_stats.add_argument("--k-edge", type=int, default=80)
@@ -271,7 +330,7 @@ def main() -> None:
 
     p_road_hierarchy = sub.add_parser(
         "road-hierarchy",
-        help="Analisa contribuição de classes highway para conectividade, centralidade e resiliência.",
+        help="Analisa contribuição de classes highway para conectividade, centralidade e robustez estrutural.",
     )
     p_road_hierarchy.add_argument("--city", required=True)
     _add_year_argument(p_road_hierarchy)
@@ -299,7 +358,7 @@ def main() -> None:
 
     p_subcenters = sub.add_parser(
         "subcenters",
-        help="Detecta subcentros topológicos e mede centralidade policêntrica.",
+        help="Seleciona células candidatas de alta centralidade topológica.",
     )
     p_subcenters.add_argument("--city", required=True)
     _add_year_argument(p_subcenters)
@@ -324,7 +383,75 @@ def main() -> None:
     _add_year_argument(p_scale_profile)
     p_scale_profile.add_argument("--scales", type=float, nargs="+", default=[500.0, 1000.0, 2000.0, 3000.0])
 
+    p_robustness_summary = sub.add_parser(
+        "robustness-summary",
+        help="Sintetiza curvas de robustez por AUC, perdas e limiares em intervalo comparável.",
+    )
+    p_robustness_summary.add_argument(
+        "datasets",
+        nargs="+",
+        help="Datasets processados. Ex.: campinas_admin jundiai_admin sorocaba_admin valinhos_admin",
+    )
+    p_robustness_summary.add_argument("--output-dir", default="outputs/comparisons")
+    p_robustness_summary.add_argument(
+        "--max-fraction",
+        type=float,
+        help="Limite opcional; cada modalidade usa o menor valor entre este limite e a cobertura comum real.",
+    )
+    p_robustness_summary.add_argument(
+        "--checkpoints",
+        type=float,
+        nargs="+",
+        default=[0.01, 0.05, 0.10, 0.15],
+        help="Frações para interpolar valores e perdas.",
+    )
+    p_robustness_summary.add_argument(
+        "--thresholds",
+        type=float,
+        nargs="+",
+        default=[0.90, 0.75, 0.50],
+        help="Níveis retidos cujos primeiros cruzamentos serão estimados.",
+    )
+    p_robustness_summary.add_argument(
+        "--allow-incomplete",
+        action="store_true",
+        help="Aceita conscientemente uma matriz incompleta de curvas; o padrão é falhar.",
+    )
+    p_robustness_summary.add_argument(
+        "--city-output-root",
+        help="Raiz explícita dos resumos por dataset; útil para execuções isoladas.",
+    )
+
+    p_representation = sub.add_parser(
+        "representation-audit",
+        help="Compara representações dirigidas/múltiplas e mede a sensibilidade dos rankings.",
+    )
+    p_representation.add_argument("--city", required=True)
+    _add_year_argument(p_representation)
+    p_representation.add_argument("--top-k", type=int, default=20)
+    p_representation.add_argument("--seed", type=int, default=42)
+
+    p_integrity = sub.add_parser(
+        "artifact-integrity",
+        help="Gate fail-closed de completude, hashes, esquema e frescor dos artefatos.",
+    )
+    p_integrity.add_argument(
+        "--city",
+        help="Dataset; pode ser omitido quando --manifest identifica exatamente um dataset.",
+    )
+    _add_year_argument(p_integrity)
+    p_integrity.add_argument("--manifest")
+    p_integrity.add_argument("--output-root", default="outputs")
+    p_integrity.add_argument("--stages", nargs="+", choices=sorted(STAGE_CONTRACTS))
+    p_integrity.add_argument(
+        "--hash-size-limit-bytes",
+        type=int,
+        default=DEFAULT_HASH_SIZE_LIMIT_BYTES,
+        help="Limite opcional para hashing; por padrão todos os arquivos declarados são verificados.",
+    )
+
     args = parser.parse_args()
+    recorder.set_parsed_args(args)
 
     if args.cmd == "ping":
         print("ic: ok, funcionando...")
@@ -391,6 +518,7 @@ def main() -> None:
         print("\n[E5] Centralidades concluídas ✅")
         print("Top nós CSV:", res["top_nodes_csv"])
         print("Centralidades completas:", res["all_nodes_csv"])
+        print("Centralidades completas de arestas:", res["edge_centralities_csv"])
         print("Rankings:", res["rankings_csv"])
         print("Top arestas CSV:", res["top_edges_csv"])
         print("Relatório:", res["report_txt"])
@@ -420,10 +548,27 @@ def main() -> None:
         return
 
     if args.cmd == "comparison-audit":
-        res = auditar_comparabilidade(args.datasets, output_path=args.output)
+        comparison_output_dir = (
+            str(Path(args.output).parent) if args.output else args.output_dir
+        )
+        res = auditar_comparabilidade_cientifica(
+            args.datasets,
+            output_dir=comparison_output_dir,
+            perfil=args.profile,
+            snapshot_policy=args.snapshot_policy,
+        )
+        if args.output:
+            write_legacy_comparison_csv(args.datasets, res, args.output)
         print("\n[Comparabilidade] Auditoria concluída")
-        print("Status:", res["status"])
-        print("CSV:", res["audit_csv"])
+        print("Estado:", res["state"])
+        print("Critérios:", res["criteria_csv"])
+        print("Datasets:", res["datasets_csv"])
+        print("Pares:", res["pairs_csv"])
+        print("Relatório:", res["report_txt"])
+        if args.output:
+            print("CSV legado solicitado:", args.output)
+        if res["state"] != CONFIRMED:
+            raise SystemExit(1)
         return
 
     if args.cmd == "historical-audit":
@@ -439,17 +584,25 @@ def main() -> None:
             city_id=_dataset_city(args),
             mode=args.mode,
             seeds=args.seeds,
+            repetitions=args.repetitions,
+            master_seed=args.master_seed,
+            evaluation_seed=args.evaluation_seed,
             max_fraction=args.max_fraction,
             steps=args.steps,
             k_edge=args.k_edge,
             k_node=args.k_node,
             efficiency_samples=args.eff_samples,
+            bootstrap_resamples=args.bootstrap_resamples,
         )
-        print("\n[ESTATÍSTICA] Resiliência aleatória agregada concluída ✅")
+        print("\n[ESTATÍSTICA] Robustez aleatória agregada concluída ✅")
+        print("Repetições independentes:", res["repetitions"])
+        print("Semente fixa de avaliação:", res["evaluation_seed"])
         if "edge" in res:
             print("Arestas CSV agregado:", res["edge"]["aggregate_csv"])
+            print("Arestas AUC:", res["edge"]["auc_csv"])
         if "node" in res:
             print("Vértices CSV agregado:", res["node"]["aggregate_csv"])
+            print("Vértices AUC:", res["node"]["auc_csv"])
         return
 
     if args.cmd == "vulnerability-index":
@@ -566,13 +719,13 @@ def main() -> None:
             percentile=args.percentile,
             min_nodes=args.min_nodes,
         )
-        print("\n[Subcentros] Centralidade policêntrica gerada ✅")
+        print("\n[Candidatos topológicos] Análise exploratória gerada ✅")
         print("Células CSV:", res["cells_csv"])
-        print("Subcentros CSV:", res["subcenters_csv"])
+        print("Candidatos CSV:", res["subcenters_csv"])
         print("Resumo CSV:", res["summary_csv"])
         print("Mapa:", res["map_html"])
         print("Relatório:", res["report_txt"])
-        print("Subcentros detectados:", res["subcenters_count"])
+        print("Candidatos selecionados:", res["subcenters_count"])
         return
 
     if args.cmd == "urban-barriers":
@@ -605,6 +758,59 @@ def main() -> None:
         print("Índice multiescalar:", res["multiscale_robustness_index"])
         return
 
+    if args.cmd == "robustness-summary":
+        res = gerar_sintese_robustez(
+            args.datasets,
+            output_dir=args.output_dir,
+            max_fraction=args.max_fraction,
+            checkpoints=args.checkpoints,
+            thresholds=args.thresholds,
+            allow_incomplete=args.allow_incomplete,
+            city_output_root=args.city_output_root,
+        )
+        print("\n[Robustez] Síntese quantitativa concluída ✅")
+        print("Datasets:", ", ".join(res["datasets"]))
+        print("Frações comuns:", res["common_fractions"])
+        print("CSV comparativo:", res["comparison_csv"])
+        print("HTML comparativo:", res["comparison_html"])
+        print("Gráfico comparativo:", res["comparison_plot"])
+        print("Gráfico de perdas:", res["comparison_losses_plot"])
+        for dataset, paths in res["city_outputs"].items():
+            print(f"Resumo {dataset}:", paths["summary_csv"])
+        return
+
+    if args.cmd == "representation-audit":
+        res = analisar_representacoes(
+            _dataset_city(args),
+            top_k=args.top_k,
+            seed=args.seed,
+        )
+        print("\n[Representação] Auditoria concluída ✅")
+        print("Inventário:", res["audit_csv"])
+        print("Sensibilidade dos rankings:", res["sensitivity_csv"])
+        print("Relatório:", res["report_txt"])
+        return
+
+    if args.cmd == "artifact-integrity":
+        if args.city is None and args.year is not None:
+            raise SystemExit("--year exige --city; sem cidade, o dataset deve vir de --manifest.")
+        res = auditar_integridade_artefatos(
+            dataset=_dataset_city(args) if args.city is not None else None,
+            manifest=args.manifest,
+            output_root=args.output_root,
+            stages=args.stages,
+            hash_size_limit_bytes=args.hash_size_limit_bytes,
+        )
+        print("\n[Integridade] Auditoria concluída")
+        print("Escopo:", res["scope"])
+        print("Status do escopo:", res["overall_status"])
+        print("Seguro dentro do escopo auditado:", "SIM" if res["safe_to_use"] else "NÃO")
+        print("CSV:", res["audit_csv"])
+        print("Relatório:", res["report_txt"])
+        if not res["safe_to_use"]:
+            raise SystemExit(1)
+        return
+
     if args.cmd == "communities":
         res = detectar_comunidades(
             city_id=_dataset_city(args),
@@ -628,8 +834,9 @@ def main() -> None:
             k_edge=args.k_edge,
             efficiency_samples=args.eff_samples,
             seed=args.seed,
+            evaluation_seed=args.evaluation_seed,
         )
-        print("\n[E7] Resiliência concluída ✅")
+        print("\n[E7] Robustez estrutural concluída ✅")
         print("Curva CSV:", res["curve_csv"])
         print("Figura:", res["curve_plot"])
         print("Relatório:", res["report_txt"])
@@ -644,8 +851,9 @@ def main() -> None:
             k_node=args.k_node,
             efficiency_samples=args.eff_samples,
             seed=args.seed,
+            evaluation_seed=args.evaluation_seed,
         )
-        print("\n[E7V] Resiliência por remoção de vértices concluída ✅")
+        print("\n[E7V] Robustez estrutural por remoção de vértices concluída ✅")
         print("Curva CSV:", res["curve_csv"])
         print("Vértices removidos:", res["removed_nodes_csv"])
         print("Figura:", res["curve_plot"])
@@ -661,7 +869,7 @@ def main() -> None:
             min_size=args.min_size,
             seed=args.seed,
         )
-        print("\n[E7C] Resiliência por comunidades concluída ✅")
+        print("\n[E7C] Robustez estrutural por comunidades concluída ✅")
         print("Curva CSV:", res["curve_csv"])
         print("Resumo comunidades:", res["summary_csv"])
         print("Top conexões:", res["top_edges_csv"])
@@ -680,7 +888,7 @@ def main() -> None:
             efficiency_samples=args.eff_samples,
             seed=args.seed,
         )
-        print("\n[E7I] Resiliência interna das comunidades concluída ✅")
+        print("\n[E7I] Robustez estrutural interna das comunidades concluída ✅")
         print("Comunidades analisadas:", res["communities_analyzed"])
         print("Curvas CSV:", res["curve_csv"])
         print("Resumo CSV:", res["summary_csv"])
@@ -751,6 +959,9 @@ def main() -> None:
             args.datasets,
             output_dir=args.output_dir,
             min_coverage=args.min_coverage,
+            metric_profile=args.metric_profile,
+            minimum_datasets=args.minimum_datasets,
+            allow_small_sample_exploration=args.allow_small_sample_exploration,
         )
         print("\n[Similaridade] Análise entre cidades gerada ✅")
         print("Métricas usadas:", res["metrics_used"])
@@ -761,7 +972,39 @@ def main() -> None:
         print("PCA:", res["pca_csv"])
         print("Clusters:", res["clusters_csv"])
         print("Relatório:", res["report_txt"])
+        print("Status de inferência:", res["inference_status"])
         return
+
+def main() -> None:
+    recorder = begin_cli_run()
+    try:
+        _main(recorder)
+    except SystemExit as exc:
+        try:
+            recorder.finish(
+                "success" if exc.code in (None, 0) else "failure",
+                exc if exc.code else None,
+            )
+        except BaseException as provenance_error:
+            exc.add_note(
+                "Falha adicional ao persistir a proveniência: "
+                f"{type(provenance_error).__name__}: {provenance_error}"
+            )
+            raise exc from provenance_error
+        raise
+    except BaseException as exc:
+        try:
+            recorder.finish("failure", exc)
+        except BaseException as provenance_error:
+            exc.add_note(
+                "Falha adicional ao persistir a proveniência: "
+                f"{type(provenance_error).__name__}: {provenance_error}"
+            )
+            raise exc from provenance_error
+        raise
+    else:
+        recorder.finish("success")
+
 
 if __name__ == "__main__":
     main()

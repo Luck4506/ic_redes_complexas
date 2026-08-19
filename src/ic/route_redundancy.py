@@ -8,7 +8,7 @@ from typing import Any
 import folium
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import edge_length_m
 
 
@@ -121,7 +121,7 @@ def analisar_redundancia_rotas(
     map_limit: int = 20,
 ) -> dict[str, Any]:
     ensure_city_dirs(city_id)
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     G_raw = load_graphml(graph_path)
     G = _simple_directed_min_length_graph(G_raw)
 

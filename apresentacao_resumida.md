@@ -1,14 +1,21 @@
 # Apresentação Resumida - Novidades Implementadas no Projeto
 
+> **Revisão metodológica — 18/08/2026:** os termos atuais são robustez estrutural, bloqueios
+> regionais estilizados, pares OD uniformes entre nós e células candidatas de alta centralidade
+> topológica. Outputs legados devem ser regenerados/auditados antes de apoiar conclusões.
+
 Este arquivo resume apenas o que foi acrescentado ao projeto durante a evolução recente. A ideia é servir como versão curta para reunião: explicar o que cada nova análise faz, o que mostrar ao professor, por que ela faz sentido dentro da IC e qual comando reproduz o dado.
 
 Dataset usado nos exemplos: `campinas_admin`.
 
-## 1. Resiliência por remoção de vértices
+Estado revisto em 18 de agosto de 2026: há ampla cobertura funcional, mas a liberação científica
+depende das novas auditorias de integridade, proveniência, representação e comparabilidade.
+
+## 1. Robustez estrutural por remoção de vértices
 
 **O que é**
 
-Antes a resiliência era medida removendo arestas, ou seja, trechos de vias. Foi adicionada uma análise separada para remover vértices, que representam interseções ou pontos estruturais da rede.
+Antes a robustez estrutural era medida removendo arestas, ou seja, trechos de vias. Foi adicionada uma análise separada para remover vértices, que representam interseções ou pontos estruturais da rede.
 
 **Como é medida**
 
@@ -37,18 +44,18 @@ Bloquear uma interseção pode afetar várias vias ao mesmo tempo. Isso represen
 ic node-resilience --city campinas_admin --strategy targeted --max-fraction 0.15 --steps 15 --k-node 80 --eff-samples 20 --seed 42
 ```
 
-## 2. Resiliência entre comunidades e dentro das comunidades
+## 2. Robustez estrutural entre comunidades e dentro das comunidades
 
 **O que é**
 
-Foi adicionada a resiliência no nível das comunidades. Existem duas leituras:
+Foi adicionada a robustez estrutural no nível das comunidades. Existem duas leituras:
 
 - entre comunidades: cada comunidade vira um nó em um grafo agregado;
 - dentro das comunidades: cada comunidade é analisada separadamente como subgrafo.
 
 **Como é medida**
 
-Na resiliência entre comunidades, o sistema mede se as regiões topológicas da cidade dependem de poucas conexões entre si. Na resiliência interna, mede quais comunidades se fragmentam mais rápido quando suas arestas internas são removidas.
+Na robustez entre comunidades, o sistema mede se as regiões topológicas da cidade dependem de poucas conexões entre si. Na robustez interna, mede quais comunidades se fragmentam mais rápido quando suas arestas internas são removidas.
 
 **O que mostrar**
 
@@ -59,7 +66,9 @@ Na resiliência entre comunidades, o sistema mede se as regiões topológicas da
 
 **Por que importa**
 
-O grafo inteiro pode parecer resiliente, mas algumas regiões podem ser frágeis. Essa análise mostra a fragilidade interna e a dependência entre regiões da cidade.
+O grafo inteiro pode parecer estruturalmente robusto no cenário de remoção, mas algumas regiões
+podem ser frágeis. Essa análise mostra a fragilidade interna e a dependência entre regiões da
+cidade; não mede recuperação temporal.
 
 **Comandos**
 
@@ -100,7 +109,7 @@ Foi criado um ranking composto de vulnerabilidade para nós e arestas. Ele combi
 
 **Como é medido**
 
-O score usa centralidade, participação em ataques de resiliência, pontes, articulações, fronteiras entre comunidades, tipo de via, comprimento e importância topológica.
+O score usa centralidade, participação em ataques de robustez, pontes, articulações, fronteiras entre comunidades, tipo de via, comprimento e importância topológica.
 
 **O que mostrar**
 
@@ -177,7 +186,8 @@ O padrão usado foi alternativa até 1,5 vez a rota original.
 
 **Por que importa**
 
-Duas redes podem ter distância média parecida, mas uma pode oferecer mais alternativas. Isso mede robustez funcional da malha.
+Duas redes podem ter distância média parecida, mas uma pode oferecer mais alternativas. Isso
+mede redundância estrutural sob um bloqueio estilizado, não robustez funcional observada.
 
 **Comando**
 
@@ -235,7 +245,8 @@ Para cada célula, o sistema remove vias incidentes ou internas e mede o impacto
 
 **Por que importa**
 
-Eventos reais, como enchentes, obras ou acidentes, costumam afetar áreas locais. Essa análise aproxima a resiliência de cenários urbanos reais.
+Eventos reais podem afetar áreas locais, mas este módulo não modela hazard, probabilidade ou
+intensidade observada. Ele testa cenários regionais estilizados.
 
 **Comando**
 
@@ -251,7 +262,7 @@ Foi adicionada uma análise por classes `highway` do OpenStreetMap: primary, sec
 
 **Como é medida**
 
-Para cada classe, o sistema calcula participação em arestas, extensão, centralidade, vulnerabilidade e impacto na resiliência quando a classe é removida.
+Para cada classe, o sistema calcula participação em arestas, extensão, centralidade, vulnerabilidade e impacto na robustez estrutural quando a classe é removida.
 
 **O que mostrar**
 
@@ -304,7 +315,8 @@ Foi adicionada uma análise estatística de rotas, usando muitos pares origem-de
 
 **Como é medida**
 
-Para cada par OD, o sistema calcula distância da rota, distância direta, hops, circuity, eficiência relativa e acessibilidade por limiares de distância.
+Para cada par OD uniforme entre nós, o sistema calcula distância da rota, distância direta, hops,
+circuity, eficiência relativa e fração abaixo de limiares de distância.
 
 **O que mostrar**
 
@@ -314,7 +326,8 @@ Para cada par OD, o sistema calcula distância da rota, distância direta, hops,
 
 **Por que importa**
 
-Transforma acessibilidade em uma distribuição estatística, o que é mais útil para comparar cidades.
+Produz uma distribuição estatística sob esse desenho amostral; não estima demanda OD nem
+acessibilidade observada da população.
 
 **Comando**
 
@@ -341,30 +354,37 @@ O sistema usa métricas consolidadas do inventário, padroniza por z-score e cal
 
 **Por que importa**
 
-Ajuda a responder quais cidades são estruturalmente parecidas, fortalecendo a parte do projeto sobre padrões recorrentes e especificidades locais.
+Com amostra suficiente, ajuda a comparar perfis estruturais. Com apenas quatro cidades, PCA,
+clustering e “cidade mais próxima” são visualizações exploratórias sensíveis às métricas e ao
+escalonamento; não estabelecem semelhança estrutural geral.
 
 **Comando**
 
 ```bash
-ic city-similarity campinas_admin jundiai_admin sorocaba_admin valinhos_admin --output-dir outputs/comparisons --min-coverage 1.0
+ic city-similarity campinas_admin jundiai_admin sorocaba_admin valinhos_admin \
+  --output-dir outputs/comparisons --min-coverage 1.0 --allow-small-sample-exploration
 ```
 
-## 13. Detecção de subcentros e centralidade policêntrica
+## 13. Células candidatas de alta centralidade topológica
 
 **O que é**
 
-Foi adicionada uma análise para medir se a cidade depende de um centro topológico dominante ou se possui vários subcentros.
+Foi adicionada uma análise para localizar células candidatas com alta centralidade topológica e
+medir a concentração do score entre elas.
 
 **Como é medida**
 
-Cada célula recebe um score de subcentro combinando centralidade acumulada, centralidade máxima, closeness, eigenvector, densidade, grau médio, quantidade de nós e diversidade de comunidades. As células acima do percentil configurado são classificadas como subcentros.
+Cada célula recebe um score de candidatura combinando centralidade acumulada, centralidade
+máxima, closeness, eigenvector, densidade, grau médio, quantidade de nós e diversidade de
+comunidades. As células acima do percentil configurado são selecionadas como candidatas
+topológicas, não como subcentros urbanos validados.
 
 Também são calculados:
 
-- índice de policentralidade;
-- índice de monocentralidade;
+- índice exploratório de dispersão dos candidatos;
+- índice de dominância topológica;
 - entropia dos scores;
-- participação do principal subcentro.
+- participação da principal célula candidata.
 
 **O que mostrar**
 
@@ -374,7 +394,8 @@ Também são calculados:
 
 **Por que importa**
 
-Duas cidades podem ter métricas globais parecidas, mas uma ser monocêntrica e outra policêntrica. Isso conversa diretamente com planejamento urbano e distribuição de acessibilidade.
+Sem dados de empregos, população, atividades ou fluxos, o módulo não classifica cidades como
+mono ou policêntricas; ele compara apenas a concentração da centralidade topológica.
 
 **Comando**
 
@@ -486,7 +507,7 @@ Foram ampliados os artefatos finais para reunir todas as análises em formatos a
 
 **Por que importa**
 
-Esses arquivos são o pacote principal para reunião e escrita do relatório. Eles juntam mapas, gráficos, tabelas e métricas comparáveis.
+Esses arquivos são o pacote principal para reunião e escrita do relatório. Eles juntam mapas, gráficos, tabelas e métricas em formato comum; a comparação só é liberada depois dos gates.
 
 **Comandos**
 
@@ -497,6 +518,50 @@ ic report --city campinas_admin
 ic compare campinas_admin jundiai_admin sorocaba_admin valinhos_admin --output outputs/comparisons/compare_admin_cities.html
 ```
 
+## 18. Síntese quantitativa das curvas de robustez
+
+**O que é**
+
+As curvas de remoção agora também são resumidas numericamente. O sistema calcula a área sob a
+curva normalizada (AUC), perdas em frações padronizadas e o ponto em que conectividade ou
+eficiência caem abaixo de limiares definidos.
+
+**Como é medida**
+
+- integra por trapézios as curvas da maior componente, eficiência topológica e eficiência por
+  distância;
+- usa a maior fração de remoção comum entre todas as cidades e estratégias da mesma modalidade;
+- interpola resultados em 1%, 5%, 10% e 15%;
+- procura os primeiros cruzamentos abaixo de 90%, 75% e 50%;
+- mantém separadas remoções de nós, arestas e conexões entre comunidades;
+- usa as repetições aleatórias existentes para mostrar a dispersão da AUC.
+
+AUC maior significa que a rede preservou, em média, uma parcela maior da resposta durante o
+intervalo analisado. Ela não deve ser comparada diretamente entre modalidades diferentes sem
+explicar que nós, arestas e comunidades representam perturbações distintas.
+
+**O que mostrar**
+
+- [outputs/comparisons/robustness_comparison.html](outputs/comparisons/robustness_comparison.html)
+- [outputs/comparisons/robustness_comparison.png](outputs/comparisons/robustness_comparison.png)
+- [outputs/comparisons/robustness_losses.png](outputs/comparisons/robustness_losses.png)
+- [outputs/comparisons/robustness_comparison.csv](outputs/comparisons/robustness_comparison.csv)
+- [outputs/campinas_admin/figures/robustness_summary_auc.png](outputs/campinas_admin/figures/robustness_summary_auc.png)
+- [outputs/campinas_admin/figures/robustness_summary_losses.png](outputs/campinas_admin/figures/robustness_summary_losses.png)
+- [outputs/campinas_admin/metrics/robustness_summary.csv](outputs/campinas_admin/metrics/robustness_summary.csv)
+
+**Por que importa**
+
+Antes, a comparação podia depender do último ponto ou da inspeção visual. A AUC usa a curva
+inteira no intervalo comum e permite responder com mais rigor qual estratégia degrada mais cada
+rede e qual cidade retém melhor conectividade ou eficiência.
+
+**Comando**
+
+```bash
+ic robustness-summary campinas_admin jundiai_admin sorocaba_admin valinhos_admin
+```
+
 ## Fechamento
 
-As principais novidades transformaram o projeto de uma pipeline básica de métricas de grafos em uma plataforma de análise urbana mais completa. Agora o sistema mede não só estrutura global, mas também vulnerabilidade, resiliência por diferentes modos de falha, comunidades, acessibilidade, morfologia urbana, subcentros, barreiras, estabilidade por escala e similaridade entre cidades.
+As principais novidades transformaram o projeto de uma pipeline básica de métricas de grafos em uma plataforma de análise urbana mais completa. Agora o sistema mede não só estrutura global, mas também vulnerabilidade, robustez por diferentes modos de falha, síntese quantitativa das curvas, comunidades, acessibilidade, morfologia urbana, subcentros, barreiras, estabilidade por escala e similaridade entre cidades.

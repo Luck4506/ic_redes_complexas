@@ -8,7 +8,7 @@ from typing import Any
 import folium
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import simple_undirected_min_length_graph
 
 
@@ -28,7 +28,7 @@ def calcular_centralidades(
 ) -> dict:
     ensure_city_dirs(city_id)
 
-    grafo_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    grafo_path = str(dataset_graph_path(city_id, "clean"))
 
     print(f"[E5] Carregando grafo de {city_id}...", flush=True)
     G_dir = load_graphml(grafo_path)
@@ -108,6 +108,41 @@ def calcular_centralidades(
                 eigenvector.get(node, 0.0),
             ])
 
+    all_edges_csv = f"{pasta_metrics}/edge_centralities.csv"
+    with open(all_edges_csv, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow([
+            "u",
+            "v",
+            "u_lat",
+            "u_lon",
+            "v_lat",
+            "v_lon",
+            "edge_betweenness",
+            "length_m",
+            "name",
+            "highway",
+            "osmid",
+        ])
+        for (u, v), score in sorted(
+            edge_b.items(),
+            key=lambda item: tuple(sorted((str(item[0][0]), str(item[0][1])))),
+        ):
+            data = G.get_edge_data(u, v, default={})
+            w.writerow([
+                u,
+                v,
+                G_dir.nodes[u]["y"],
+                G_dir.nodes[u]["x"],
+                G_dir.nodes[v]["y"],
+                G_dir.nodes[v]["x"],
+                score,
+                data.get("length", ""),
+                _edge_label(data.get("name")),
+                _edge_label(data.get("highway")),
+                _edge_label(data.get("osmid")),
+            ])
+
     rankings_csv = f"{pasta_metrics}/centrality_rankings.csv"
     with open(rankings_csv, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -163,6 +198,7 @@ def calcular_centralidades(
         f.write(f"Nós: {n} | Arestas: {m}\n")
         f.write(f"Betweenness aprox: k={k_b}, seed={seed}\n")
         f.write(f"Edge betweenness aprox: k={k_e}, seed={seed}\n\n")
+        f.write(f"Centralidades completas de arestas: {all_edges_csv}\n\n")
         f.write(f"Closeness aprox: landmarks={k_c}, seed={seed}\n")
         f.write("Eigenvector: método espectral sobre grafo simples não direcionado.\n\n")
         f.write("Top 10 nós por betweenness:\n")
@@ -227,6 +263,8 @@ def calcular_centralidades(
     return {
         "top_nodes_csv": nodes_csv,
         "all_nodes_csv": all_nodes_csv,
+        "edge_centralities_csv": all_edges_csv,
+        "all_edges_csv": all_edges_csv,
         "rankings_csv": rankings_csv,
         "top_edges_csv": edges_csv,
         "report_txt": report_txt,
@@ -236,11 +274,18 @@ def calcular_centralidades(
 
 
 def approximate_closeness_centrality(G: nx.Graph, samples: int = 120, seed: int = 42) -> dict:
-    """Estima closeness como o inverso da distância média a landmarks aleatórios."""
+    """Estima closeness com landmarks e correção para pares inalcançáveis.
+
+    O próprio nó não integra o denominador quando também é landmark. Isso evita
+    misturar ``k`` e ``k - 1`` observações sem explicitar a população elegível.
+    Quando todos os nós são usados, a fórmula coincide com a closeness de
+    Wasserman--Faust empregada pelo NetworkX, inclusive em grafos desconectados.
+    """
     nodes = list(G.nodes())
     if not nodes:
         return {}
     landmarks = nodes if len(nodes) <= samples else random.Random(seed).sample(nodes, samples)
+    landmark_set = set(landmarks)
     distance_sums = {node: 0.0 for node in nodes}
     reached = {node: 0 for node in nodes}
     for landmark in landmarks:
@@ -248,7 +293,13 @@ def approximate_closeness_centrality(G: nx.Graph, samples: int = 120, seed: int 
             if node != landmark and distance > 0:
                 distance_sums[node] += float(distance)
                 reached[node] += 1
-    return {
-        node: reached[node] / distance_sums[node] if distance_sums[node] > 0 else 0.0
-        for node in nodes
-    }
+    closeness: dict = {}
+    for node in nodes:
+        eligible = len(landmarks) - int(node in landmark_set)
+        if eligible <= 0 or reached[node] <= 0 or distance_sums[node] <= 0:
+            closeness[node] = 0.0
+            continue
+        inverse_mean_reachable = reached[node] / distance_sums[node]
+        reachable_fraction = reached[node] / eligible
+        closeness[node] = inverse_mean_reachable * reachable_fraction
+    return closeness

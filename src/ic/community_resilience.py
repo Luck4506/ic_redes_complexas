@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import approximate_global_efficiency, edge_length_m, simple_undirected_min_length_graph
 
 
@@ -39,22 +39,28 @@ def _node_community(node: Any, mapping: dict[str, int]) -> int | None:
     return mapping.get(str(node))
 
 
-def _largest_component_weighted_fraction(G: nx.Graph) -> tuple[int, float]:
+def _largest_component_weighted_fraction(G: nx.Graph) -> float:
     if G.number_of_nodes() == 0:
-        return 0, 0.0
+        return 0.0
 
     total_size = sum(float(data.get("size", 0.0)) for _, data in G.nodes(data=True))
-    largest_nodes = max(nx.connected_components(G), key=len)
-    largest_size = sum(float(G.nodes[n].get("size", 0.0)) for n in largest_nodes)
-    return len(largest_nodes), largest_size / total_size if total_size else 0.0
+    if total_size <= 0:
+        return 0.0
+
+    largest_weighted_size = max(
+        sum(float(G.nodes[node].get("size", 0.0)) for node in component)
+        for component in nx.connected_components(G)
+    )
+    return largest_weighted_size / total_size
 
 
-def _community_lcc_stats(G: nx.Graph) -> tuple[int, int, float, int]:
+def _community_lcc_stats(G: nx.Graph) -> tuple[int, int, float]:
     if G.number_of_nodes() == 0:
-        return 0, 0, 0.0, 0
+        return 0, 0, 0.0
     components = list(nx.connected_components(G))
-    lcc_count, lcc_node_fraction = _largest_component_weighted_fraction(G)
-    return lcc_count, len(components), lcc_node_fraction, max((len(c) for c in components), default=0)
+    lcc_communities = max((len(component) for component in components), default=0)
+    lcc_weighted_fraction = _largest_component_weighted_fraction(G)
+    return lcc_communities, len(components), lcc_weighted_fraction
 
 
 def _build_community_graph(
@@ -142,14 +148,14 @@ def testar_resiliencia_comunidades(
     min_size: int = 30,
     seed: int = 42,
 ) -> dict:
-    """Resiliência do grafo agregado de comunidades."""
+    """Robustez estrutural do grafo agregado de comunidades."""
     ensure_city_dirs(city_id)
     if strategy not in {"random", "targeted", "targeted_adaptive"}:
         raise ValueError("strategy deve ser 'random', 'targeted' ou 'targeted_adaptive'.")
     if not 0 < max_fraction <= 1:
         raise ValueError("max_fraction deve estar no intervalo (0, 1].")
 
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     communities_path = f"outputs/{city_id}/metrics/nodes_communities.csv"
 
     print(f"[E7C] Carregando grafo: {graph_path}", flush=True)
@@ -181,7 +187,7 @@ def testar_resiliencia_comunidades(
     records = []
 
     def add_record() -> None:
-        lcc_count, num_components, lcc_nodes_fraction, lcc_communities = _community_lcc_stats(H)
+        lcc_communities, num_components, lcc_weighted_fraction = _community_lcc_stats(H)
         eff = approximate_global_efficiency(H, samples=n0, seed=seed)
         eff_len = approximate_global_efficiency(H, samples=n0, seed=seed, weight="length")
         records.append(
@@ -189,8 +195,10 @@ def testar_resiliencia_comunidades(
                 "removed_edges": removed,
                 "removed_fraction": removed / m0 if m0 else 0.0,
                 "lcc_communities": lcc_communities,
-                "lcc_communities_fraction": lcc_count / n0 if n0 else 0.0,
-                "lcc_nodes_fraction": lcc_nodes_fraction,
+                "lcc_communities_fraction": lcc_communities / n0 if n0 else 0.0,
+                "lcc_weighted_fraction": lcc_weighted_fraction,
+                # Nome legado preservado para consumidores existentes.
+                "lcc_nodes_fraction": lcc_weighted_fraction,
                 "num_components": num_components,
                 "efficiency_topological": eff,
                 "efficiency_topological_retained": eff / eff0 if eff0 else 0.0,
@@ -279,14 +287,14 @@ def testar_resiliencia_comunidades(
     plt.plot(xs, ys_nodes, marker="s", label="Nós representados")
     plt.xlabel("Fração de conexões entre comunidades removidas")
     plt.ylabel("Fração na maior componente")
-    plt.title(f"Resiliência por comunidades ({city_id}) — {strategy}")
+    plt.title(f"Robustez estrutural por comunidades ({city_id}) — {strategy}")
     plt.grid(True)
     plt.legend()
     plt.savefig(plot_path, dpi=150, bbox_inches="tight")
     plt.close()
 
     with open(report_txt, "w", encoding="utf-8") as f:
-        f.write("=== Resiliência por Comunidades ===\n\n")
+        f.write("=== Robustez Estrutural por Comunidades ===\n\n")
         f.write(f"Entrada grafo: {graph_path}\n")
         f.write(f"Entrada comunidades: {communities_path}\n")
         f.write(f"Estratégia: {strategy}\n")

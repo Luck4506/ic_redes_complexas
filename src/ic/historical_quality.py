@@ -8,7 +8,7 @@ from typing import Any
 
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, dataset_metadata_path, ensure_city_dirs, load_graphml
 from .metric_graphs import edge_length_m, simple_undirected_min_length_graph
 
 
@@ -80,7 +80,7 @@ def _largest_component_fraction(G: nx.Graph) -> float:
 
 
 def _read_metadata(dataset: str) -> dict[str, Any]:
-    path = Path(f"data/metadata/{dataset}_drive_raw.json")
+    path = dataset_metadata_path(dataset, "raw")
     if not path.exists():
         return {}
     return json.loads(path.read_text(encoding="utf-8"))
@@ -136,7 +136,7 @@ def auditar_qualidade_historica(reference: str, datasets: list[str], output_dir:
         ensure_city_dirs(dataset)
 
     graphs = {
-        dataset: load_graphml(f"data/graphs/{dataset}_drive_clean.graphml")
+        dataset: load_graphml(str(dataset_graph_path(dataset, "clean")))
         for dataset in all_datasets
     }
     reference_ids = _way_ids(graphs[reference])

@@ -18,6 +18,25 @@ from .graph_inventory import gerar_planilha_grafo
 from .html_report import _as_float, _e, _format_value, _read_csv_dicts
 
 
+THEORY_CORE_METRICS = {
+    "physical_collapsed_length_km_per_km2",
+    "nodes_per_km2",
+    "degree_mean",
+    "transitivity",
+    "communities_largest_pct",
+    "robustness_edge_random_lcc_auc_normalized_mean",
+    "robustness_edge_targeted_lcc_auc_normalized_mean",
+    "robustness_node_random_lcc_auc_normalized_mean",
+    "robustness_node_targeted_lcc_auc_normalized_mean",
+    "robustness_community_targeted_lcc_auc_normalized_mean",
+    "route_redundancy_reasonable_rate",
+    "spatial_robustness_mean_lcc_fraction_drop",
+    "road_hierarchy_arterial_length_fraction",
+    "od_efficiency_circuity_ratio_mean",
+    "network_scale_least_stable_cv",
+}
+
+
 def _safe_name(value: str) -> str:
     return "".join(ch if ch.isalnum() or ch in {"_", "-"} else "_" for ch in value)
 
@@ -39,9 +58,15 @@ def _summary_for_dataset(dataset: str) -> dict[str, dict[str, str]]:
     return {row.get("indicador", ""): row for row in rows if row.get("indicador")}
 
 
-def _numeric_metric_keys(summaries: dict[str, dict[str, dict[str, str]]], min_coverage: float) -> list[tuple[str, str, str]]:
+def _numeric_metric_keys(
+    summaries: dict[str, dict[str, dict[str, str]]],
+    min_coverage: float,
+    metric_profile: str = "theory_core",
+) -> list[tuple[str, str, str]]:
     candidates: list[tuple[str, str, str]] = []
     for group, key, label, _description in COMPARISON_METRICS:
+        if metric_profile == "theory_core" and key not in THEORY_CORE_METRICS:
+            continue
         values = [_as_float(summaries[dataset].get(key, {}).get("valor")) for dataset in summaries]
         present = [value for value in values if value is not None and math.isfinite(value)]
         if len(present) / len(summaries) < min_coverage:
@@ -291,7 +316,7 @@ def _write_html(
   <main>
     <section class="panel wide">
       <h2>Metodologia</h2>
-      <p>Foram extraídas {metrics_used} métricas numéricas dos inventários consolidados, preenchendo ausências com a média da métrica e padronizando cada coluna por z-score. Distâncias menores indicam cidades estruturalmente mais parecidas dentro do conjunto analisado.</p>
+      <p>Foram usadas {metrics_used} métricas numéricas, padronizadas por z-score. Distâncias menores indicam perfis mais próximos apenas dentro deste conjunto e desta seleção de métricas. PCA, clusters e vizinhos são descrições exploratórias, não uma tipologia urbana confirmada. O cosseno em dados centrados pode ser negativo e não é um percentual de semelhança.</p>
     </section>
     <section class="panel">
       <h2>Distância Euclidiana</h2>
@@ -328,15 +353,36 @@ def analisar_similaridade_cidades(
     datasets: list[str],
     output_dir: str = "outputs/comparisons",
     min_coverage: float = 1.0,
+    metric_profile: str = "theory_core",
+    minimum_datasets: int = 8,
+    allow_small_sample_exploration: bool = False,
 ) -> dict[str, Any]:
     if len(datasets) < 2:
         raise ValueError("Passe pelo menos dois datasets para calcular similaridade.")
     datasets = [_safe_name(dataset) for dataset in datasets]
+    if len(set(datasets)) != len(datasets):
+        raise ValueError("Cada dataset deve aparecer uma única vez.")
+    if metric_profile not in {"theory_core", "all"}:
+        raise ValueError("metric_profile deve ser 'theory_core' ou 'all'.")
+    if not 0 < min_coverage <= 1:
+        raise ValueError("min_coverage deve estar no intervalo (0, 1].")
+    if minimum_datasets < 3:
+        raise ValueError("minimum_datasets deve ser pelo menos 3.")
+    if len(datasets) < minimum_datasets and not allow_small_sample_exploration:
+        raise ValueError(
+            f"Amostra insuficiente para PCA, clustering e vizinho mais próximo: {len(datasets)} "
+            f"datasets, mínimo configurado {minimum_datasets}. Amplie a amostra ou passe "
+            "allow_small_sample_exploration=True e trate todos os resultados como descritivos."
+        )
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     suffix = "_vs_".join(datasets)
 
     summaries = {dataset: _summary_for_dataset(dataset) for dataset in datasets}
-    metrics = _numeric_metric_keys(summaries, min_coverage=min_coverage)
+    metrics = _numeric_metric_keys(
+        summaries,
+        min_coverage=min_coverage,
+        metric_profile=metric_profile,
+    )
     if not metrics:
         raise ValueError("Nenhuma métrica numérica com cobertura suficiente foi encontrada.")
     raw = _raw_matrix(datasets, summaries, metrics)
@@ -402,6 +448,11 @@ def analisar_similaridade_cidades(
     )
 
     report_txt = f"{output_dir}/city_similarity_report_{suffix}.txt"
+    inference_status = (
+        "descritivo_exploratorio_amostra_pequena"
+        if len(datasets) < minimum_datasets
+        else "descritivo_amostra_minima_atendida"
+    )
     nearest_text = "\n".join(
         f"- {row['dataset']} mais parecida com {row['nearest_dataset']} "
         f"(distância={float(row['euclidean_distance']):.4f}, cosseno={float(row['cosine_similarity']):.4f})"
@@ -413,8 +464,14 @@ def analisar_similaridade_cidades(
                 "Similaridade Entre Cidades",
                 f"Datasets: {', '.join(datasets)}",
                 f"Métricas numéricas usadas: {len(metrics)}",
+                f"Perfil de métricas: {metric_profile}",
+                f"Status de inferência: {inference_status}",
+                f"Regra de amostra mínima: {minimum_datasets} datasets",
                 "",
-                "Cidade mais parecida por distância euclidiana:",
+                "ATENÇÃO: distâncias, PCA, vizinhos e clusters são descrições dependentes das métricas e do conjunto; não constituem tipologia urbana confirmada.",
+                "A similaridade cosseno é calculada em z-scores centrados e pode ser negativa; não deve ser lida como percentual de semelhança.",
+                "",
+                "Dataset mais próximo por distância euclidiana no conjunto:",
                 nearest_text,
                 "",
                 "Arquivos:",
@@ -440,4 +497,7 @@ def analisar_similaridade_cidades(
         "nearest_csv": nearest_csv,
         "report_txt": report_txt,
         "metrics_used": len(metrics),
+        "metric_profile": metric_profile,
+        "minimum_datasets": minimum_datasets,
+        "inference_status": inference_status,
     }

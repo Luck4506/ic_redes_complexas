@@ -7,9 +7,16 @@ from typing import Any
 import folium
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import simple_undirected_min_length_graph
-from .vulnerability_index import _as_float, _edge_key, _first_label, _highway_importance, _minmax
+from .vulnerability_index import (
+    _as_float,
+    _edge_key,
+    _first_label,
+    _highway_importance,
+    _load_complete_edge_betweenness,
+    _minmax,
+)
 
 
 def _read_csv(path: str) -> list[dict[str, str]]:
@@ -122,11 +129,8 @@ def _node_rows(city_id: str, G: nx.Graph, articulations: list[Any]) -> list[dict
 
 def _edge_rows(city_id: str, G: nx.Graph, bridges: list[tuple[Any, Any]]) -> list[dict[str, Any]]:
     node_to_comm = {row.get("node", ""): row.get("community_id", "") for row in _read_csv(f"outputs/{city_id}/metrics/nodes_communities.csv")}
-    top_edges = {
-        _edge_key(row.get("u", ""), row.get("v", "")): _as_float(row.get("edge_betweenness"))
-        for row in _read_csv(f"outputs/{city_id}/metrics/top_edges.csv")
-    }
-    edge_betweenness_norm = _minmax(top_edges)
+    edge_betweenness = _load_complete_edge_betweenness(city_id, G)
+    edge_betweenness_norm = _minmax(edge_betweenness)
 
     rows: list[dict[str, Any]] = []
     for u, v in bridges:
@@ -149,7 +153,7 @@ def _edge_rows(city_id: str, G: nx.Graph, bridges: list[tuple[Any, Any]]) -> lis
                 "v_lon": G.nodes[v].get("x", ""),
                 "bottleneck_score": score,
                 **impact,
-                "edge_betweenness": top_edges.get(key, 0.0),
+                "edge_betweenness": edge_betweenness[key],
                 "length_m": data.get("length", ""),
                 "highway": data.get("highway", ""),
                 "highway_label": _first_label(data.get("highway")),
@@ -305,7 +309,7 @@ def _combined_map(path: str, rows: list[dict[str, Any]], G: nx.Graph, top_k: int
 
 def analisar_gargalos_estruturais(city_id: str, top_k: int = 100) -> dict[str, Any]:
     ensure_city_dirs(city_id)
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     G_dir = load_graphml(graph_path)
     Gu = simple_undirected_min_length_graph(G_dir)
     if nx.is_connected(Gu):

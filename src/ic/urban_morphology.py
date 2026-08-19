@@ -9,7 +9,7 @@ from typing import Any
 import folium
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import simple_undirected_min_length_graph
 from .spatial_multiscale import _build_grid, _color, _mean
 
@@ -269,7 +269,7 @@ def _metric_map(path: str, rows: list[dict[str, Any]], metric: str, title: str) 
 
 def analisar_morfologia_urbana(city_id: str, cell_size_m: float = 1000.0) -> dict[str, Any]:
     ensure_city_dirs(city_id)
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     G_dir = load_graphml(graph_path)
     G = simple_undirected_min_length_graph(G_dir)
     if not nx.is_connected(G):

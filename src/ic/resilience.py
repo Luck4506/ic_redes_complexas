@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import approximate_global_efficiency, simple_undirected_min_length_graph
 
 
@@ -65,6 +65,7 @@ def testar_resiliencia(
     k_edge: int = 80,
     efficiency_samples: int = 20,
     seed: int = 42,
+    evaluation_seed: int | None = None,
     output_suffix: str | None = None,
 ) -> dict:
     """
@@ -81,15 +82,16 @@ def testar_resiliencia(
     """
     ensure_city_dirs(city_id)
     rng = random.Random(seed)
+    evaluation_seed = seed if evaluation_seed is None else evaluation_seed
 
-    grafo_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    grafo_path = str(dataset_graph_path(city_id, "clean"))
     print(f"[E7] Carregando grafo: {grafo_path}", flush=True)
     G_dir = load_graphml(grafo_path)
 
     if not 0 < max_fraction <= 1:
         raise ValueError("max_fraction deve estar no intervalo (0, 1].")
 
-    # Resiliência estrutural -> undirected simples, preservando menor length
+    # Robustez estrutural -> undirected simples, preservando menor length
     Gu = simple_undirected_min_length_graph(G_dir)
     if not nx.is_connected(Gu):
         largest_cc = max(nx.connected_components(Gu), key=len)
@@ -128,8 +130,13 @@ def testar_resiliencia(
 
     # estado inicial
     size_lcc, num_comp = _largest_cc_stats(G)
-    eff0 = approximate_global_efficiency(G, samples=efficiency_samples, seed=seed)
-    eff_len0 = approximate_global_efficiency(G, samples=efficiency_samples, seed=seed, weight="length")
+    eff0 = approximate_global_efficiency(G, samples=efficiency_samples, seed=evaluation_seed)
+    eff_len0 = approximate_global_efficiency(
+        G,
+        samples=efficiency_samples,
+        seed=evaluation_seed,
+        weight="length",
+    )
     registros.append(
         {
             "removed_edges": 0,
@@ -157,8 +164,13 @@ def testar_resiliencia(
                 removed += 1
 
         size_lcc, num_comp = _largest_cc_stats(G)
-        eff = approximate_global_efficiency(G, samples=efficiency_samples, seed=seed)
-        eff_len = approximate_global_efficiency(G, samples=efficiency_samples, seed=seed, weight="length")
+        eff = approximate_global_efficiency(G, samples=efficiency_samples, seed=evaluation_seed)
+        eff_len = approximate_global_efficiency(
+            G,
+            samples=efficiency_samples,
+            seed=evaluation_seed,
+            weight="length",
+        )
 
         registros.append(
             {
@@ -206,25 +218,28 @@ def testar_resiliencia(
     plt.plot(xs, ys, marker="o")
     plt.xlabel("Fração de arestas removidas")
     plt.ylabel("Fração da maior componente (LCC)")
-    plt.title(f"Resiliência ({city_id}) — {strategy}")
+    plt.title(f"Robustez estrutural por remoção de arestas ({city_id}) — {strategy}")
     plt.grid(True)
     plt.savefig(curve_plot, dpi=150, bbox_inches="tight")
     plt.close()
 
     with open(report_txt, "w", encoding="utf-8") as f:
-        f.write("=== Resiliência (E7) ===\n\n")
+        f.write("=== Robustez Estrutural por Remoção de Arestas (E7) ===\n\n")
         f.write(f"Entrada: {grafo_path}\n")
         f.write(f"Grafo analisado: nós={n0} arestas={m0}\n")
         f.write(f"Estratégia: {strategy}\n")
         f.write(f"Max fraction removida: {max_fraction}\n")
         f.write(f"Steps: {steps}\n")
         f.write(f"k_edge (targeted): {k_edge}\n")
-        f.write(f"efficiency_samples: {efficiency_samples}\n\n")
+        f.write(f"efficiency_samples: {efficiency_samples}\n")
+        f.write(f"attack_seed: {seed}\n")
+        f.write(f"evaluation_seed: {evaluation_seed}\n\n")
         f.write("Notas metodológicas:\n")
         f.write("  - Grafo: simples, não-direcionado, maior componente conectada.\n")
         f.write("  - Arestas paralelas são colapsadas mantendo o menor length.\n")
         f.write("  - efficiency_approx é topológica e conta pares desconectados como zero.\n")
         f.write("  - efficiency_length_approx usa distância em metros; compare principalmente a fração retida.\n")
+        f.write("  - A semente do ataque é separada da semente usada para amostrar a eficiência.\n")
         if strategy == "targeted":
             f.write("  - targeted usa ranking estático de edge betweenness inicial.\n")
         elif strategy == "targeted_adaptive":

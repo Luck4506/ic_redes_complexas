@@ -12,7 +12,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import simple_undirected_min_length_graph
 
 
@@ -20,7 +20,7 @@ def structural_metrics(city_id: str, samples_for_paths: int = 30, seed: int = 42
     ensure_city_dirs(city_id)
     random.seed(seed)
 
-    clean_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    clean_path = str(dataset_graph_path(city_id, "clean"))
 
     out_metrics_csv = f"outputs/{city_id}/metrics/structural_metrics.csv"
     out_degree_csv = f"outputs/{city_id}/metrics/degree_distribution.csv"

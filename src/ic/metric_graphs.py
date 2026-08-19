@@ -7,12 +7,16 @@ from typing import Any
 import networkx as nx
 
 
-def edge_length_m(data: dict[str, Any], default: float = 1.0) -> float:
+def edge_length_m(data: dict[str, Any], default: float | None = None) -> float:
     try:
-        value = float(data.get("length", default))
+        value = float(data.get("length"))
     except (TypeError, ValueError):
+        value = math.nan
+    if math.isfinite(value) and value > 0:
+        return value
+    if default is not None:
         return default
-    return value if math.isfinite(value) and value > 0 else default
+    raise ValueError("Aresta sem comprimento 'length' finito e positivo; não será inventado 1 m.")
 
 
 def simple_undirected_min_length_graph(G: nx.Graph) -> nx.Graph:
@@ -36,6 +40,18 @@ def simple_undirected_min_length_graph(G: nx.Graph) -> nx.Graph:
             Gu.add_edge(u, v, **attrs)
 
     return Gu
+
+
+def collapsed_physical_length_m(G: nx.Graph) -> float:
+    """Approximate physical street length after collapsing direction/parallel arcs.
+
+    This is intentionally distinct from routing length. It counts one shortest
+    valid segment per unordered endpoint pair and therefore avoids automatically
+    double-counting reciprocal arcs. It remains a topological proxy rather than
+    a geometric reconstruction of divided carriageways.
+    """
+    graph = simple_undirected_min_length_graph(G)
+    return sum(edge_length_m(data) for _, _, data in graph.edges(data=True))
 
 
 def approximate_global_efficiency(

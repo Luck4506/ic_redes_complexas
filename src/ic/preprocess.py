@@ -3,14 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml, save_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml, save_graphml
 
 
 def preprocess_city(city_id: str) -> dict:
     ensure_city_dirs(city_id)
 
-    raw_path = f"data/graphs/{city_id}_drive_raw.graphml"
-    clean_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    raw_path = str(dataset_graph_path(city_id, "raw"))
+    clean_path = str(dataset_graph_path(city_id, "clean"))
     log_path = f"outputs/{city_id}/logs/grafo_resumo.txt"
 
     G = load_graphml(raw_path)

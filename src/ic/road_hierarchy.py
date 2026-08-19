@@ -7,7 +7,7 @@ from typing import Any
 import folium
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import approximate_global_efficiency, simple_undirected_min_length_graph
 from .resilience import _largest_cc_stats
 from .vulnerability_index import _as_float, _edge_key, _first_label
@@ -240,7 +240,7 @@ def analisar_hierarquia_viaria(
     map_edges_per_class: int = 1200,
 ) -> dict[str, Any]:
     ensure_city_dirs(city_id)
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     G_dir = load_graphml(graph_path)
     G = simple_undirected_min_length_graph(G_dir)
     if not nx.is_connected(G):

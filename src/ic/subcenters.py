@@ -9,7 +9,7 @@ from typing import Any
 import folium
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import simple_undirected_min_length_graph
 from .spatial_multiscale import _build_grid, _color, _mean
 from .vulnerability_index import _as_float
@@ -279,7 +279,7 @@ def detectar_subcentros(
     min_nodes: int = 20,
 ) -> dict[str, Any]:
     ensure_city_dirs(city_id)
-    graph_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    graph_path = str(dataset_graph_path(city_id, "clean"))
     G_dir = load_graphml(graph_path)
     G = simple_undirected_min_length_graph(G_dir)
     if not nx.is_connected(G):
@@ -308,19 +308,20 @@ def detectar_subcentros(
     Path(report_txt).write_text(
         "\n".join(
             [
-                "Detecção de Subcentros e Centralidade Policêntrica",
+                "Células Candidatas de Alta Centralidade Topológica",
                 f"Dataset: {city_id}",
                 f"Célula espacial: {cell_size_m} m",
                 f"Percentil de corte: {percentile}",
                 f"Nós mínimos por célula: {min_nodes}",
-                f"Subcentros detectados: {summary_map.get('subcenters_count', 0)}",
-                f"Índice de policentralidade: {float(summary_map.get('polycentricity_index', 0.0)):.4f}",
-                f"Índice de monocentralidade: {float(summary_map.get('monocentricity_index', 0.0)):.4f}",
+                f"Candidatos selecionados: {summary_map.get('subcenters_count', 0)}",
+                f"Índice exploratório de dispersão: {float(summary_map.get('polycentricity_index', 0.0)):.4f}",
+                f"Índice exploratório de dominância: {float(summary_map.get('monocentricity_index', 0.0)):.4f}",
                 "",
                 "Interpretação:",
                 "  - O score combina centralidade acumulada, centralidade máxima, densidade local, conectividade e comunidades tocadas.",
-                "  - Policentralidade alta indica que vários subcentros dividem a importância estrutural.",
-                "  - Monocentralidade alta indica concentração do score em um subcentro dominante.",
+                "  - Dispersão alta indica que várias células candidatas dividem a importância topológica.",
+                "  - Dominância alta indica concentração do score em uma célula candidata.",
+                "  - Sem empregos, população, atividades ou fluxos, o módulo não comprova subcentros nem policentricidade urbana.",
                 "",
                 f"CSV células: {cells_csv}",
                 f"CSV subcentros: {subcenters_csv}",

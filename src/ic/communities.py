@@ -9,7 +9,7 @@ from typing import Dict, List, Set
 import folium
 import networkx as nx
 
-from .io_utils import ensure_city_dirs, load_graphml
+from .io_utils import dataset_graph_path, ensure_city_dirs, load_graphml
 from .metric_graphs import simple_undirected_min_length_graph
 
 
@@ -45,7 +45,7 @@ def detectar_comunidades(
     ensure_city_dirs(city_id)
     random.seed(seed)
 
-    grafo_path = f"data/graphs/{city_id}_drive_clean.graphml"
+    grafo_path = str(dataset_graph_path(city_id, "clean"))
     print(f"[E6] Carregando grafo: {grafo_path}", flush=True)
     G_dir = load_graphml(grafo_path)
 

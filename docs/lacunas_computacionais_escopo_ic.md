@@ -1,10 +1,23 @@
 # Fechamento das lacunas computacionais do escopo da IC
 
-Data da revisão: 4 de junho de 2026.
+Data da revisão original: 4 de junho de 2026.
 
-Status após implementação: **concluído para o escopo computacional atual**.
+Status conferido em: 21 de junho de 2026.
 
-Referência: `_Projeto_2026__Lucas_Soares.pdf`, plano **Análise Estrutural da Rede Viária Urbana Brasileira Utilizando Métricas de Redes Complexas**.
+Status após a reauditoria de 18 de agosto de 2026: **cobertura computacional ampla, com
+regeneração científica obrigatória**.
+
+Referência primária conferida: plano **Análise Estrutural da Rede Viária Urbana Brasileira
+Utilizando Métricas de Redes Complexas**, disponível em
+[`_Projeto_2026__Lucas_Soares.pdf`](../_Projeto_2026__Lucas_Soares.pdf). O arquivo foi lido e
+inspecionado visualmente em 18 de agosto de 2026. A conferência literal completa está em
+[`matriz_aderencia_plano_trabalho.md`](matriz_aderencia_plano_trabalho.md).
+
+> **Nota de reauditoria.** As declarações históricas de “concluído”, “comparável” e
+> “regenerado” abaixo descrevem a amplitude do software ou execuções legadas. Elas não devem ser
+> interpretadas como validação científica dos artefatos existentes. A auditoria fail-closed atual
+> classificou as quatro cidades como `nao_comprovada` por ausência de snapshot OSM congelado,
+> identidade/hash do limite e proveniência completa dos resultados antigos.
 
 ## Recorte desta revisão
 
@@ -22,20 +35,22 @@ Não entram aqui como lacunas de software:
 
 ## Estado computacional atual
 
-O repositório já cobre a maior parte do escopo computacional prometido no PDF.
+O repositório cobre grande parte do escopo computacional confirmado no PDF. As limitações restantes
+incluem validade metodológica, proveniência dos dados legados e regeneração dos experimentos;
+por isso, a existência de um arquivo não basta para autorizar seu uso como evidência.
 
 | Item do PDF | Estado computacional | Evidência no projeto |
 |---|---|---|
-| Base de grafos de cidades brasileiras | Implementado | `ic download`, `ic preprocess`, metadados em `data/metadata/` e grafos em `data/graphs/` |
+| Pipeline de grafos urbanos | Implementado | Aplicável a novas cidades, mas a evidência atual é um estudo de caso com quatro municípios paulistas e não representa o Brasil |
 | Métricas estruturais fundamentais | Implementado | `ic structural` gera grau, densidade, transitividade, clustering aproximado, assortatividade, caminho médio e diâmetro aproximados |
 | Distribuição de graus | Implementado | `degree_distribution.csv` e `degree_distribution_loglog.png` |
 | Centralidade de grau | Implementado | `top_nodes.csv`, `node_centralities.csv`, `centrality_rankings.csv` |
 | Centralidade de intermediação | Implementado | rankings de nós e arestas críticas |
 | Centralidade de proximidade | Implementado | `closeness_approx` e validação por subgrafo |
 | Centralidade de autovetor | Implementado | `eigenvector` nos rankings |
-| Resiliência por arestas | Implementado | `ic resilience` com estratégias aleatória, dirigida e adaptativa |
-| Resiliência por vértices | Implementado | `ic node-resilience` com estratégias aleatória, dirigida e adaptativa |
-| Comparação entre cidades | Implementado parcialmente | `ic comparison-audit` e `ic compare` |
+| Robustez estrutural por arestas | Implementado | `ic resilience` com estratégias aleatória, dirigida e adaptativa; o nome legado do comando foi preservado |
+| Robustez estrutural por vértices | Implementado | `ic node-resilience` com estratégias aleatória, dirigida e adaptativa; não mede recuperação temporal |
+| Comparação entre cidades | Implementado | `ic comparison-audit`, `ic compare`, CSV/HTML consolidado, indicadores normalizados e `ic city-similarity` |
 | Visualizações interativas | Implementado | dashboards HTML, mapas de pontos críticos e mapas de rotas |
 | Relação topologia-função | Implementado como expansão útil | `ic functional-relations` usa atributos OSM como tipo de via, superfície, velocidade, faixas e mão única |
 | Análise histórica | Implementado como expansão controlada | `ic historical-audit` mede viés de cobertura OSM antes de interpretar anos antigos |
@@ -43,7 +58,7 @@ O repositório já cobre a maior parte do escopo computacional prometido no PDF.
 
 ## Itens que foram fechados
 
-### 1. Comunidades nos datasets principais comparáveis
+### 1. Comunidades nos datasets administrativos avaliados
 
 Os quatro datasets administrativos (`campinas_admin`, `jundiai_admin`, `sorocaba_admin` e
 `valinhos_admin`) agora têm os artefatos de comunidades gerados:
@@ -51,10 +66,10 @@ Os quatro datasets administrativos (`campinas_admin`, `jundiai_admin`, `sorocaba
 - `community_summary.csv`;
 - `nodes_communities.csv`;
 - `maps/comunidades.html`;
-- curvas de resiliência entre comunidades;
-- resiliência interna por comunidade.
+- curvas de robustez entre comunidades;
+- robustez interna por comunidade.
 
-Comunidades analisadas na resiliência interna dirigida:
+Comunidades analisadas na robustez interna dirigida:
 
 - Campinas administrativa: 103 comunidades;
 - Jundiaí administrativa: 73 comunidades;
@@ -86,13 +101,15 @@ relatório.
 Foi implementado o comando:
 
 ```bash
-ic random-resilience-stats --city <dataset> --mode both --seeds 42 43 44 45 46
+ic random-resilience-stats --city <dataset> --mode both --repetitions 30 --master-seed 42
 ```
 
-Ele roda ataques aleatórios por arestas e por vértices com múltiplas sementes e gera:
+Ele roda ataques aleatórios por arestas e por vértices com, por padrão, 30 repetições,
+separando a semente da ordem de ataque da semente de avaliação. Gera:
 
 - média;
 - desvio-padrão;
+- erro-padrão, quantis e intervalos bootstrap;
 - mínimo e máximo;
 - curva agregada da maior componente e da eficiência.
 
@@ -105,11 +122,11 @@ Arquivos principais por dataset:
 
 ### 4. Manifesto experimental mais completo
 
-Cada relatório consolidado agora gera também:
+Cada relatório consolidado novo gera também:
 
 - `EXPERIMENT_MANIFEST_<dataset>.json`.
 
-Esse manifesto registra:
+O manifesto v2 e o log de proveniência registram:
 
 - comando executado;
 - comando recomendado para regeneração do relatório;
@@ -117,7 +134,13 @@ Esse manifesto registra:
 - versões de OSMnx, NetworkX, pandas, numpy e scipy;
 - data/hora da execução;
 - commit Git, quando disponível;
+- argumentos efetivamente executados e configuração resolvida;
+- sementes de ataque e avaliação;
+- hashes SHA-256, tamanho e data das entradas e saídas;
+- estado Git e hash do diff quando a árvore estiver suja;
 - caminhos dos arquivos gerados.
+
+Manifestos legados não ganham essas evidências retroativamente e precisam ser regenerados.
 
 Isso atende diretamente ao resultado esperado do PDF: base estruturada, metadados
 padronizados e documentação técnica dos procedimentos.
@@ -128,18 +151,26 @@ O comando `ic centrality` agora gera um mapa próprio de vias/arestas críticas:
 
 - `maps/arestas_criticas.html`.
 
-O ranking `top_edges.csv` também foi enriquecido com:
+O arquivo `top_edges.csv` apresenta apenas o recorte das maiores centralidades, enquanto
+`edge_centralities.csv` preserva a cobertura completa necessária aos módulos downstream. Os
+arquivos registram:
 
 - arestas de maior edge betweenness;
 - nome da via, quando disponível;
 - tipo OSM da via;
 - comprimento;
 - ranking;
-- score de criticidade.
+- centralidade de intermediação da aresta.
+
+O score composto de vulnerabilidade, quando calculado, pertence a
+`vulnerability_edges.csv`; não deve ser confundido com a centralidade pura.
 
 Isso melhora a ligação entre métrica topológica e interpretação urbana posterior.
 
-## Artefatos finais atualizados
+## Artefatos finais atualizados — registro histórico
+
+Esta seção descreve uma regeneração anterior. Os manifests e outputs hoje disponíveis têm datas
+misturadas e falham no gate completo; não devem ser tratados como “finais” sem nova execução.
 
 Foram regenerados para os quatro datasets administrativos:
 
@@ -155,8 +186,9 @@ Foram regenerados para os quatro datasets administrativos:
 
 ## Expansão implementada após o fechamento
 
-Foi adicionada uma primeira expansão ainda alinhada ao PDF: o **Índice Composto de
-Vulnerabilidade Viária**.
+Foi adicionada uma primeira expansão coerente com a justificativa e os resultados esperados do
+plano: o **Índice Composto de Vulnerabilidade Viária**. Ele amplia o mapeamento de elementos
+críticos, mas não constitui um objetivo obrigatório separado no PDF.
 
 O comando:
 
@@ -217,8 +249,9 @@ gera:
 A análise amostra pares origem-destino, calcula a menor rota por distância, bloqueia todos os
 segmentos dessa rota e verifica se ainda existe caminho alternativo. A alternativa é
 classificada como razoável quando sua distância não ultrapassa o limiar configurado em relação
-à rota original. Isso permite discutir robustez funcional da malha, não apenas conectividade
-topológica.
+à rota original. Isso mede **redundância estrutural de rotas sob um cenário estilizado**. Sem
+fluxos, demanda, capacidade, tempo de viagem ou observações de tráfego, não constitui robustez
+funcional validada.
 
 Foi adicionada também a expansão **Análise Multiescala por Células Espaciais**.
 
@@ -260,8 +293,9 @@ gera:
 - `logs/spatial_robustness_report.txt`.
 
 Essa etapa simula falhas concentradas no espaço: para cada célula da grade, remove vias
-associadas à região e mede o impacto no grafo inteiro. Isso aproxima o experimento de
-cenários urbanos reais, como enchentes, obras, acidentes e bloqueios localizados.
+associadas à região e mede o impacto no grafo inteiro. É um cenário regional estilizado. Sem
+camada de perigo, probabilidade, duração ou recuperação, não deve ser apresentado como modelo
+realista de enchente, obra ou acidente.
 
 Foi adicionada também a expansão **Análise de Hierarquia Viária**.
 
@@ -302,11 +336,12 @@ gera:
 - `maps/urban_morphology_connectivity.html`;
 - `logs/urban_morphology_report.txt`.
 
-A análise divide a cidade em células espaciais e classifica cada região como gradeada,
+A análise divide a cidade em células espaciais e atribui, por regras heurísticas, rótulos como gradeada,
 radial/linear, orgânica, fragmentada, mista ou insuficiente. A classificação usa orientação
 das vias, entropia angular, participação de eixos ortogonais dominantes, conectividade local,
 maior componente e comprimento médio dos segmentos. Isso conecta métricas de grafos com
-morfologia urbana e permite discutir padrões universais e especificidades locais da malha.
+morfologia da rede, mas não valida a morfologia urbana observada. Os rótulos devem ser tratados
+como perfis heurísticos, com análise de sensibilidade, e não como padrões universais.
 
 Foi adicionada também a expansão **Eficiência de Rotas em Múltiplos Pares Origem-Destino**.
 
@@ -323,10 +358,11 @@ gera:
 - `maps/od_efficiency_routes.html`;
 - `logs/od_efficiency_report.txt`.
 
-A análise amostra centenas ou milhares de pares origem-destino no grafo dirigido, calcula a
-menor rota por distância e registra distância da rota, hops, distância direta geográfica,
-desvio, circuity, eficiência relativa e acessibilidade por limiares de 2 km, 5 km e 10 km.
-Isso transforma a rota pontual em uma distribuição estatística útil para comparar cidades.
+A análise amostra centenas ou milhares de pares de nós no grafo dirigido, calcula a menor rota
+por distância e registra distância, hops, distância direta, desvio, circuity e eficiência
+relativa. A saída é a distribuição **induzida pela amostragem uniforme de nós**: não representa
+demanda OD nem acessibilidade urbana observada e só admite comparação exploratória sob um
+protocolo comprovadamente comum.
 
 Foi adicionada também a expansão **Similaridade Entre Cidades**.
 
@@ -347,12 +383,13 @@ gera:
 - `city_similarity_<datasets>.html`;
 - mapas estáticos de distância, similaridade, PCA e dendrograma.
 
-A análise usa métricas numéricas do inventário consolidado de cada cidade, preenche ausências
-com a média da métrica, padroniza os indicadores por z-score e calcula distância euclidiana,
-similaridade cosseno, PCA e clustering hierárquico. Isso permite responder quais cidades são
-estruturalmente mais parecidas e quais se afastam do padrão do conjunto.
+A implementação atual usa um conjunto teórico reduzido de indicadores e exige ao menos oito
+datasets por padrão. PCA, clustering e “cidade mais próxima” com apenas quatro cidades ficam
+bloqueados, salvo habilitação exploratória explícita. Mesmo com amostra maior, o resultado é
+sensível às métricas, escala e distância escolhidas e deve ser acompanhado de análise de
+sensibilidade e incerteza.
 
-Foi adicionada também a expansão **Detecção de Subcentros e Centralidade Policêntrica**.
+Foi adicionada também a expansão **Candidatos de Alta Centralidade Topológica**.
 
 O comando:
 
@@ -368,12 +405,12 @@ gera:
 - `maps/subcenters.html`;
 - `logs/subcenters_report.txt`.
 
-A análise divide a cidade em células espaciais e calcula um score de subcentro com base em
+A análise divide a cidade em células espaciais e calcula um score de candidato topológico com base em
 centralidade acumulada, centralidade máxima, densidade local, conectividade, centralidade de
 proximidade, autovetor e diversidade de comunidades tocadas. As regiões acima do percentil
-configurado são classificadas como subcentros. A distribuição dos scores gera índices de
-policentralidade e monocentralidade, permitindo discutir se a cidade depende de um centro
-dominante ou se distribui sua importância estrutural entre vários núcleos.
+configurado são classificadas como candidatas de alta centralidade. Os índices derivados são
+proxies topológicos; sem empregos, atividades, uso do solo ou fluxos, não identificam
+subcentros urbanos nem policentricidade observada.
 
 Foi adicionada também a expansão **Exposição da Rede a Barreiras Urbanas**.
 
@@ -427,14 +464,29 @@ quantidade média de nós, grau médio local, densidade, fração da maior compo
 permeabilidade espacial, fração de células pouco permeáveis e score médio de baixa
 permeabilidade.
 
-Em seguida, o sistema calcula a estabilidade de cada métrica entre escalas usando coeficiente
-de variação e um score de estabilidade. O índice de robustez multiescalar resume a estabilidade
-das principais métricas locais. Isso ajuda a separar conclusões robustas de efeitos que podem
-ser artefatos da escolha de uma grade específica.
+Em seguida, o sistema calcula a variação descritiva de cada métrica entre escalas usando
+coeficiente de variação e um score heurístico. O índice agregado é uma **sensibilidade
+descritiva à escala**, não robustez espacial. Ele sinaliza possíveis efeitos da grade, mas não
+resolve o problema da unidade de área modificável (MAUP) nem acompanha células aninhadas.
 
 ## Conclusão
 
-O núcleo computacional prometido para esta etapa pode ser considerado fechado: dado o grafo de
-uma cidade, o sistema gera métricas estruturais, centralidades, comunidades, resiliência por
-arestas, vértices e comunidades, estatísticas agregadas de ataques aleatórios, mapas,
-dashboards, relatórios, manifestos e comparação consolidada entre cidades.
+### Síntese quantitativa de robustez implementada após a revisão bibliográfica
+
+Foi acrescentado o comando `ic robustness-summary`, que calcula AUC normalizada, perdas em
+frações padronizadas e limiares de degradação para curvas de remoção de nós, arestas e conexões
+entre comunidades. A análise usa uma faixa comum por modalidade, preserva as estratégias
+aleatória, dirigida e dirigida adaptativa separadamente e aproveita repetições aleatórias
+existentes para estimar dispersão da AUC.
+
+As saídas por cidade são `metrics/robustness_summary.csv`,
+`figures/robustness_summary_auc.png`, `figures/robustness_summary_losses.png` e
+`logs/robustness_summary_report.txt`. A comparação entre
+cidades gera CSV, HTML e PNG em `outputs/comparisons/`.
+
+O núcleo computacional tem cobertura ampla: dado o grafo de uma cidade, o sistema gera
+métricas estruturais, centralidades, comunidades, **robustez estrutural** sob remoção,
+estatísticas agregadas, mapas, relatórios, manifestos e artefatos comparativos. O fechamento
+científico, porém, exige regenerar as quatro cidades com snapshot OSM documentado, proveniência
+integral e todos os gates em `PASS`/`confirmada`, além de interpretar os resultados dentro do
+recorte exploratório adequado.
